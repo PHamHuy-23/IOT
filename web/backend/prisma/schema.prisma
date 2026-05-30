@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum DeviceStatus {
+  UNCLAIMED
+  ACTIVE
+  OFFLINE
+  ERROR
+}
+
+enum OtaCampaignStatus {
+  DRAFT
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  phone     String?
+  password  String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  devices   Device[]
+  claims    DeviceClaim[]
+}
+
+model Device {
+  id              String       @id @default(cuid())
+  deviceCode      String       @unique // MAC hoặc serial in trên vòng tay
+  model           String       @default("ESP32-C3-BAND")
+  firmwareVersion String       @default("1.0.0")
+  status          DeviceStatus @default(UNCLAIMED)
+  lastSeenAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  ownerId   String?
+  owner     User?          @relation(fields: [ownerId], references: [id])
+  claims    DeviceClaim[]
+  telemetry Telemetry[]
+  errors    DeviceError[]
+  otaLogs   OtaLog[]
+}
+
+model DeviceClaim {
+  id         String   @id @default(cuid())
+  deviceId   String
+  userId     String
+  claimedAt  DateTime @default(now())
+  source     String   @default("mobile_ble") // mobile_ble | admin_manual
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([userId])
+}
+
+model Telemetry {
+  id        String   @id @default(cuid())
+  deviceId  String
+  heartRate Int?
+  spo2      Int?
+  steps     Int?
+  battery   Int?
+  rawJson   String?
+  recordedAt DateTime @default(now())
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, recordedAt])
+}
+
+model DeviceError {
+  id         String   @id @default(cuid())
+  deviceId   String
+  errorCode  String   // ví dụ: E_SENSOR_HR, E_BLE_INIT
+  message    String?
+  resolved   Boolean  @default(false)
+  reportedAt DateTime @default(now())
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, resolved])
+}
+
+model Firmware {
+  id          String   @id @default(cuid())
+  version     String   @unique
+  description String?
+  fileName    String
+  filePath    String
+  checksum    String
+  minHwRev    String   @default("1.0")
+  createdAt   DateTime @default(now())
+
+  campaigns OtaCampaign[]
+}
+
+model OtaCampaign {
+  id              String            @id @default(cuid())
+  name            String
+  firmwareId      String
+  status          OtaCampaignStatus @default(DRAFT)
+  targetModel     String?
+  targetErrorCode String? // rollout theo mã lỗi
+  rolloutPercent  Int               @default(100)
+  createdAt       DateTime          @default(now())
+  startedAt       DateTime?
+
+  firmware Firmware @relation(fields: [firmwareId], references: [id])
+  logs     OtaLog[]
+}
+
+model OtaLog {
+  id         String   @id @default(cuid())
+  campaignId String
+  deviceId   String
+  status     String   // pending | downloading | success | failed
+  message    String?
+  updatedAt  DateTime @updatedAt
+
+  campaign OtaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  device   Device      @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, deviceId])
+}
