@@ -1,11 +1,10 @@
 import 'package:permission_handler/permission_handler.dart';
 
-/// Service quản lý các quyền truy cập cần thiết cho BLE
 class PermissionService {
-  // Kiểm tra và xin quyền cho BLE
   static Future<bool> requestBluetoothPermissions() async {
     try {
-      // Danh sách quyền cần xin
+      print('📋 Requesting BLE permissions...');
+
       Map<Permission, PermissionStatus> statuses = await [
         Permission.bluetooth,
         Permission.bluetoothConnect,
@@ -13,41 +12,44 @@ class PermissionService {
         Permission.location,
       ].request();
 
-      // Kiểm tra xem tất cả quyền đã được cấp chưa
-      bool allGranted = statuses.values.every(
-        (status) => status.isDenied == false,
+      final allGranted = statuses.values.every(
+        (status) => status.isGranted,
       );
 
       if (allGranted) {
-        print('✓ Đã cấp tất cả quyền BLE');
+        print('✓ All BLE permissions granted');
         return true;
       } else {
-        print('✗ Một số quyền bị từ chối');
+        print('✗ Some permissions denied:');
+        statuses.forEach((permission, status) {
+          print('  - $permission: $status');
+        });
         return false;
       }
     } catch (e) {
-      print('Lỗi khi xin quyền: $e');
+      print('✗ Permission request error: $e');
       return false;
     }
   }
 
-  // Kiểm tra xem quyền BLE có được cấp hay không
-  static Future<bool> hasBluetoothPermission() async {
-    PermissionStatus bluetoothStatus = await Permission.bluetooth.status;
-    PermissionStatus bluetoothConnectStatus =
-        await Permission.bluetoothConnect.status;
-    PermissionStatus bluetoothScanStatus =
-        await Permission.bluetoothScan.status;
-    PermissionStatus locationStatus = await Permission.location.status;
+  static Future<bool> hasBluetoothPermissions() async {
+    try {
+      final statuses = await [
+        Permission.bluetooth,
+        Permission.bluetoothConnect,
+        Permission.bluetoothScan,
+        Permission.location,
+      ].request();
 
-    return bluetoothStatus.isGranted &&
-        bluetoothConnectStatus.isGranted &&
-        bluetoothScanStatus.isGranted &&
-        locationStatus.isGranted;
+      return statuses.values.every((status) => status.isGranted);
+    } catch (e) {
+      print('✗ Permission check error: $e');
+      return false;
+    }
   }
 
-  // Mở cài đặt ứng dụng để người dùng cấp quyền thủ công
   static Future<void> openAppSettings() async {
     await openAppSettings();
   }
 }
+

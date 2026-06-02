@@ -1,7 +1,6 @@
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../constants/ble_constants.dart';
 
-/// Service chính quản lý tất cả các hoạt động BLE
 class BleService {
   static final BleService _instance = BleService._internal();
 
@@ -11,135 +10,137 @@ class BleService {
 
   BleService._internal();
 
-  // ===== Properties =====
   BluetoothDevice? _connectedDevice;
   List<BluetoothService>? _discoveredServices;
+  BluetoothCharacteristic? _heartRateChar;
+  BluetoothCharacteristic? _spo2Char;
+  BluetoothCharacteristic? _timeSyncChar;
 
-  // Streams công khai để lắng nghe sự kiện
-  Stream<List<ScanResult>> get scanResults =>
-      FlutterBluePlus.scanResults;
+  Stream<List<BluetoothDevice>> get connectedDevices =>
+      FlutterBluePlus.connectedDevices;
 
-  // ===== Scan Methods =====
+  bool isConnected() => _connectedDevice != null;
 
-  /// Bắt đầu quét thiết bị BLE
-  Future<void> startScan() async {
+  BluetoothDevice? getConnectedDevice() => _connectedDevice;
+
+  Future<void> getSystemPairedDevices() async {
     try {
-      print("🔍 Bắt đầu quét thiết bị BLE...");
+      print("🔍 Fetching bonded devices from system...");
 
-      // Kiểm tra Bluetooth đã bật chưa
-      bool isBluetoothOn = await FlutterBluePlus.isSupported;
-      if (!isBluetoothOn) {
-        throw Exception("Thiết bị không hỗ trợ Bluetooth");
+      List<BluetoothDevice> devices = await FlutterBluePlus.connectedDevices;
+      print("✓ Found ${devices.length} connected devices");
+
+      for (var device in devices) {
+        print("  📱 ${device.platformName}");
       }
-
-      // Bắt đầu quét với timeout
-      await FlutterBluePlus.startScan(
-        timeout: Duration(seconds: SCAN_TIMEOUT_SECONDS),
-        continuousUpdates: true, // Cho phép update tín hiệu từ cùng device
-      );
-
-      print("✓ Đã bắt đầu quét");
     } catch (e) {
-      print("✗ Lỗi khi bắt đầu quét: $e");
+      print("✗ Error fetching bonded devices: $e");
       rethrow;
     }
   }
 
-  /// Dừng quét thiết bị BLE
-  Future<void> stopScan() async {
+  Future<List<BluetoothDevice>> getConnectedSystemDevices() async {
     try {
-      await FlutterBluePlus.stopScan();
-      print("✓ Đã dừng quét");
+      return await FlutterBluePlus.connectedDevices;
     } catch (e) {
-      print("✗ Lỗi khi dừng quét: $e");
+      print("✗ Error getting connected devices: $e");
       rethrow;
     }
   }
 
-  // ===== Connection Methods =====
-
-  /// Kết nối đến một thiết bị
   Future<void> connectToDevice(BluetoothDevice device) async {
     try {
-      print("🔗 Đang kết nối tới: ${device.platformName}");
+      print("🔗 Connecting to: ${device.platformName}");
 
-      // Kết nối với timeout
       await device.connect(
-        license: License.nonprofit,
-        timeout: Duration(seconds: DEVICE_CONNECT_TIMEOUT_SECONDS),
-        mtu: null,
+        timeout: const Duration(seconds: DEVICE_CONNECT_TIMEOUT_SECONDS),
       );
 
       _connectedDevice = device;
-      print("✓ Kết nối thành công");
+      print("✓ Connected successfully");
 
-      // Sau khi kết nối, tự động khám phá services
       await discoverServices();
+      await setupCharacteristics();
     } catch (e) {
-      print("✗ Lỗi khi kết nối: $e");
+      print("✗ Connection error: $e");
+      _connectedDevice = null;
       rethrow;
     }
   }
 
-  /// Ngắt kết nối khỏi thiết bị
   Future<void> disconnectDevice() async {
     try {
       if (_connectedDevice != null) {
-        print("🔌 Đang ngắt kết nối...");
+        print("🔌 Disconnecting...");
         await _connectedDevice!.disconnect();
         _connectedDevice = null;
         _discoveredServices = null;
-        print("✓ Đã ngắt kết nối");
+        _heartRateChar = null;
+        _spo2Char = null;
+        _timeSyncChar = null;
+        print("✓ Disconnected");
       }
     } catch (e) {
-      print("✗ Lỗi khi ngắt kết nối: $e");
+      print("✗ Disconnection error: $e");
       rethrow;
     }
   }
 
-  // ===== Service Discovery Methods =====
-
-  /// Khám phá các services và characteristics của thiết bị
   Future<void> discoverServices() async {
     try {
       if (_connectedDevice == null) {
-        throw Exception("Không có thiết bị nào đang kết nối");
+        throw Exception("No connected device");
       }
 
-      print("🔎 Đang khám phá services...");
+      print("🔎 Discovering services...");
 
-      // Lấy danh sách services
       List<BluetoothService> services =
           await _connectedDevice!.discoverServices();
 
       _discoveredServices = services;
 
-      print(
-          "✓ Tìm thấy ${services.length} services:");
+      print("✓ Found ${services.length} services:");
 
-      // In ra thông tin services
       for (var service in services) {
         print("  📋 Service: ${service.uuid}");
-        print("     Tìm thấy ${service.characteristics.length} characteristics:");
-
         for (var characteristic in service.characteristics) {
           print("     • ${characteristic.uuid}");
-          print(
-              "       Properties: ${characteristic.properties}");
         }
       }
     } catch (e) {
-      print("✗ Lỗi khi khám phá services: $e");
+      print("✗ Service discovery error: $e");
       rethrow;
     }
   }
 
-  /// Lấy danh sách services đã khám phá
-  List<BluetoothService>? getDiscoveredServices() {
-    return _discoveredServices;
+  Future<void> setupCharacteristics() async {
+    try {
+      if (_discoveredServices == null) {
+        throw Exception("Services not discovered");
+      }
+
+      _heartRateChar = getCharacteristic(
+        HEART_RATE_SERVICE_UUID,
+        HEART_RATE_MEASUREMENT_UUID,
+      );
+
+      _spo2Char = getCharacteristic(
+        SPO2_SERVICE_UUID,
+        SPO2_MEASUREMENT_UUID,
+      );
+
+      _timeSyncChar = getCharacteristic(
+        TIME_SYNC_SERVICE_UUID,
+        TIME_SYNC_CHARACTERISTIC_UUID,
+      );
+
+      print("✓ Characteristics setup complete");
+    } catch (e) {
+      print("✗ Characteristic setup error: $e");
+      rethrow;
+    }
   }
 
-  /// Lấy một characteristic theo service UUID và characteristic UUID
   BluetoothCharacteristic? getCharacteristic(
     String serviceUuid,
     String characteristicUuid,
@@ -147,29 +148,24 @@ class BleService {
     if (_discoveredServices == null) return null;
 
     try {
-      // Chuyển đổi UUIDs sang full format nếu cần
-      String fullServiceUuid = getFullUuid(serviceUuid);
-      String fullCharacteristicUuid = getFullUuid(characteristicUuid);
-
-      // Tìm service
       var service = _discoveredServices!.firstWhere(
-        (s) => _uuidMatches(s.uuid.toString(), fullServiceUuid),
+        (s) => _uuidMatches(s.uuid.toString(), serviceUuid),
+        orElse: () => throw Exception("Service not found"),
       );
 
-      // Tìm characteristic trong service
       var characteristic = service.characteristics.firstWhere(
-        (c) => _uuidMatches(c.uuid.toString(), fullCharacteristicUuid),
+        (c) => _uuidMatches(c.uuid.toString(), characteristicUuid),
+        orElse: () => throw Exception("Characteristic not found"),
       );
 
       return characteristic;
     } catch (e) {
       print(
-          "✗ Không tìm thấy characteristic: serviceUuid=$serviceUuid, charUuid=$characteristicUuid");
+          "✗ Characteristic lookup failed: serviceUuid=$serviceUuid, charUuid=$characteristicUuid");
       return null;
     }
   }
 
-  /// Đăng ký lắng nghe (Subscribe) dữ liệu từ một characteristic
   bool _uuidMatches(String actual, String expected) {
     String normalize(String uuid) {
       var value = uuid.toLowerCase();
@@ -182,133 +178,112 @@ class BleService {
     return normalize(actual) == normalize(expected);
   }
 
-  Future<Stream<List<int>>?> subscribeToCharacteristic(
-    String serviceUuid,
-    String characteristicUuid,
-  ) async {
+  Stream<List<int>>? subscribeToHeartRate() {
+    if (_heartRateChar == null) return null;
+
     try {
-      var characteristic =
-          getCharacteristic(serviceUuid, characteristicUuid);
-
-      if (characteristic == null) {
-        throw Exception(
-            "Không tìm thấy characteristic: $characteristicUuid");
-      }
-
-      // Kiểm tra xem characteristic có hỗ trợ notify không
-      if (!characteristic.properties.notify &&
-          !characteristic.properties.indicate) {
-        throw Exception(
-            "Characteristic không hỗ trợ notify/indicate");
-      }
-
-      print(
-          "📡 Đang đăng ký lắng nghe characteristic: $characteristicUuid");
-
-      // Bật notify (lắng nghe)
-      await characteristic.setNotifyValue(true);
-
-      // Trả về stream của dữ liệu
-      return characteristic.lastValueStream;
+      print("📡 Subscribing to heart rate...");
+      _heartRateChar!.setNotifyValue(true);
+      return _heartRateChar!.lastValueStream;
     } catch (e) {
-      print("✗ Lỗi khi subscribe characteristic: $e");
+      print("✗ Heart rate subscription error: $e");
+      return null;
+    }
+  }
+
+  Stream<List<int>>? subscribeToSpO2() {
+    if (_spo2Char == null) return null;
+
+    try {
+      print("📡 Subscribing to SpO2...");
+      _spo2Char!.setNotifyValue(true);
+      return _spo2Char!.lastValueStream;
+    } catch (e) {
+      print("✗ SpO2 subscription error: $e");
+      return null;
+    }
+  }
+
+  Future<void> unsubscribeFromHeartRate() async {
+    if (_heartRateChar != null) {
+      try {
+        await _heartRateChar!.setNotifyValue(false);
+        print("✓ Heart rate unsubscribed");
+      } catch (e) {
+        print("✗ Heart rate unsubscribe error: $e");
+      }
+    }
+  }
+
+  Future<void> unsubscribeFromSpO2() async {
+    if (_spo2Char != null) {
+      try {
+        await _spo2Char!.setNotifyValue(false);
+        print("✓ SpO2 unsubscribed");
+      } catch (e) {
+        print("✗ SpO2 unsubscribe error: $e");
+      }
+    }
+  }
+
+  int parseHeartRate(List<int> data) {
+    if (data.length < 3) return 0;
+    int bpm = data[1] | (data[2] << 8);
+    return bpm.clamp(0, MAX_HEART_RATE);
+  }
+
+  int parseSpO2(List<int> data) {
+    if (data.isEmpty) return 0;
+    int spo2 = data[0];
+    return spo2.clamp(0, MAX_SPO2);
+  }
+
+  Future<void> syncTime(DateTime time) async {
+    if (_timeSyncChar == null) {
+      throw Exception("Time sync characteristic not available");
+    }
+
+    try {
+      List<int> payload = [
+        time.hour,
+        time.minute,
+        time.second,
+      ];
+
+      print("✍️ Syncing time: ${time.hour}:${time.minute}:${time.second}");
+      await _timeSyncChar!.write(payload, withoutResponse: true);
+      print("✓ Time synced");
+    } catch (e) {
+      print("✗ Time sync error: $e");
       rethrow;
     }
   }
 
-  /// Dừng lắng nghe dữ liệu từ một characteristic
-  Future<void> unsubscribeFromCharacteristic(
-    String serviceUuid,
-    String characteristicUuid,
-  ) async {
+  Future<List<BluetoothDevice>> scanForDevice() async {
     try {
-      var characteristic =
-          getCharacteristic(serviceUuid, characteristicUuid);
+      print("🔍 Scanning for ESP32C3-Watch...");
 
-      if (characteristic != null) {
-        await characteristic.setNotifyValue(false);
-        print(
-            "✓ Đã dừng lắng nghe characteristic: $characteristicUuid");
+      await FlutterBluePlus.startScan(
+        timeout: const Duration(seconds: SCAN_TIMEOUT_SECONDS),
+        withConnected: true,
+      );
+
+      await for (var result in FlutterBluePlus.scanResults) {
+        final matching = result
+            .where((r) => r.device.platformName == TARGET_DEVICE_NAME)
+            .toList();
+        if (matching.isNotEmpty) {
+          await FlutterBluePlus.stopScan();
+          print("✓ Found ESP32C3-Watch during scan");
+          return matching.map((r) => r.device).toList();
+        }
       }
+
+      await FlutterBluePlus.stopScan();
+      return [];
     } catch (e) {
-      print("✗ Lỗi khi unsubscribe characteristic: $e");
-      rethrow;
+      print("✗ Scan error: $e");
+      return [];
     }
-  }
-
-  /// Đọc giá trị hiện tại của một characteristic
-  Future<List<int>?> readCharacteristic(
-    String serviceUuid,
-    String characteristicUuid,
-  ) async {
-    try {
-      var characteristic =
-          getCharacteristic(serviceUuid, characteristicUuid);
-
-      if (characteristic == null) {
-        throw Exception(
-            "Không tìm thấy characteristic: $characteristicUuid");
-      }
-
-      if (!characteristic.properties.read) {
-        throw Exception(
-            "Characteristic không hỗ trợ read");
-      }
-
-      print(
-          "📖 Đang đọc characteristic: $characteristicUuid");
-      var value = await characteristic.read();
-
-      print(
-          "✓ Giá trị đọc được: $value");
-      return value;
-    } catch (e) {
-      print("✗ Lỗi khi đọc characteristic: $e");
-      rethrow;
-    }
-  }
-
-  /// Ghi giá trị cho một characteristic
-  Future<void> writeCharacteristic(
-    String serviceUuid,
-    String characteristicUuid,
-    List<int> value,
-  ) async {
-    try {
-      var characteristic =
-          getCharacteristic(serviceUuid, characteristicUuid);
-
-      if (characteristic == null) {
-        throw Exception(
-            "Không tìm thấy characteristic: $characteristicUuid");
-      }
-
-      if (!characteristic.properties.write &&
-          !characteristic.properties.writeWithoutResponse) {
-        throw Exception(
-            "Characteristic không hỗ trợ write");
-      }
-
-      print(
-          "✍️ Đang ghi giá trị: $value tới characteristic: $characteristicUuid");
-      await characteristic.write(value);
-
-      print("✓ Ghi thành công");
-    } catch (e) {
-      print("✗ Lỗi khi ghi characteristic: $e");
-      rethrow;
-    }
-  }
-
-  // ===== Helper Methods =====
-
-  /// Kiểm tra xem có thiết bị nào đang kết nối không
-  bool isConnected() {
-    return _connectedDevice != null;
-  }
-
-  /// Lấy thiết bị hiện tại đang kết nối
-  BluetoothDevice? getConnectedDevice() {
-    return _connectedDevice;
   }
 }

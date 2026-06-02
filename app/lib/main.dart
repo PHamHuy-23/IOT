@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'screens/scan_screen.dart';
+import 'package:provider/provider.dart';
+import 'providers/health_provider.dart';
+import 'screens/dashboard_screen.dart';
+import 'themes/app_theme.dart';
 
 void main() {
   runApp(const MyApp());
@@ -10,16 +13,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: "Health Monitor BLE",
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-        ),
-        useMaterial3: true,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => HealthProvider()),
+      ],
+      child: MaterialApp(
+        title: 'Health Monitor BLE',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.darkTheme,
+        home: const DashboardScreen(),
       ),
-      home: const ScanScreen(),
     );
   }
 }
