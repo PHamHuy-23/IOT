@@ -95,8 +95,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
       // Thử custom UUID
       try {
         var stream = await widget.bleService.subscribeToCharacteristic(
-          CUSTOM_HEALTH_SERVICE_UUID,
-          CUSTOM_HEART_RATE_UUID,
+          HEART_RATE_SERVICE_UUID,
+          HEART_RATE_MEASUREMENT_UUID,
         );
 
         if (stream != null) {

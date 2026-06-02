@@ -1,8 +1,11 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../constants/ble_constants.dart';
 import '../models/health_metrics.dart';
 import '../services/ble_service.dart';
+import '../services/permission_service.dart';
 
 class HealthProvider extends ChangeNotifier {
   final BleService _bleService = BleService();
@@ -35,7 +38,7 @@ class HealthProvider extends ChangeNotifier {
   }
 
   void _initializeStreams() {
-    _bleService.connectedDevices.listen((devices) {
+    FlutterBluePlus.events.onConnectionStateChanged.listen((_) {
       notifyListeners();
     });
   }
@@ -45,19 +48,54 @@ class HealthProvider extends ChangeNotifier {
       _setConnecting(true);
       _errorMessage = "";
 
-      List<BluetoothDevice> connectedDevices =
-          await _bleService.getConnectedSystemDevices();
-
-      BluetoothDevice? watchDevice;
-      for (var device in connectedDevices) {
-        if (device.platformName == TARGET_DEVICE_NAME) {
-          watchDevice = device;
-          break;
+      if (!await PermissionService.hasBluetoothPermissions()) {
+        final granted =
+            await PermissionService.requestBluetoothPermissions();
+        if (!granted) {
+          _connectionStatus =
+              "Cấp quyền Bluetooth và Vị trí cho app trong Cài đặt.";
+          _setConnecting(false);
+          notifyListeners();
+          return;
         }
       }
 
+      final androidIssue = await PermissionService.androidBleReadinessIssue();
+      if (androidIssue != null) {
+        _connectionStatus = androidIssue;
+        _setConnecting(false);
+        notifyListeners();
+        return;
+      }
+
+      // Reuse an existing GATT connection if the watch is already connected.
+      for (final device in FlutterBluePlus.connectedDevices) {
+        if (BleService.isWatchDevice(device)) {
+          await connectToDevice(device);
+          return;
+        }
+      }
+
+      // iOS: có thể dùng thiết bị đã ghép. Android: KHÔNG dùng bonded — ghép
+      // trong Cài đặt thường báo "không thể giao tiếp với thiết bị".
+      if (!Platform.isAndroid) {
+        for (final device in await FlutterBluePlus.bondedDevices) {
+          if (BleService.isWatchDevice(device)) {
+            await connectToDevice(device);
+            return;
+          }
+        }
+      }
+
+      _connectionStatus = "Scanning for $TARGET_DEVICE_NAME...";
+      notifyListeners();
+
+      final watchDevice = await _bleService.findWatchDevice();
       if (watchDevice == null) {
-        _connectionStatus = "Device not paired. Please pair via Bluetooth Settings";
+        _connectionStatus = Platform.isAndroid
+            ? "Không thấy $TARGET_DEVICE_NAME. Bật đồng hồ, bật GPS, đứng gần. "
+                "Không ghép đôi trong Cài đặt Bluetooth."
+            : "$TARGET_DEVICE_NAME not found. Power on the watch and stay nearby.";
         _setConnecting(false);
         notifyListeners();
         return;
@@ -66,7 +104,7 @@ class HealthProvider extends ChangeNotifier {
       await connectToDevice(watchDevice);
     } catch (e) {
       _errorMessage = e.toString();
-      _connectionStatus = "Connection failed";
+      _connectionStatus = "Connection failed: $e";
       _setConnecting(false);
       notifyListeners();
     }
@@ -85,7 +123,8 @@ class HealthProvider extends ChangeNotifier {
       _isConnected = true;
       _connectionStatus = "Connected to ${device.platformName}";
 
-      _subscribeToHealthMetrics();
+      await _subscribeToHealthMetrics();
+      await syncTimeToWatch();
 
       _setConnecting(false);
       notifyListeners();
@@ -123,8 +162,8 @@ class HealthProvider extends ChangeNotifier {
     }
   }
 
-  void _subscribeToHealthMetrics() {
-    final hrStream = _bleService.subscribeToHeartRate();
+  Future<void> _subscribeToHealthMetrics() async {
+    final hrStream = await _bleService.subscribeToHeartRate();
     if (hrStream != null) {
       hrStream.listen((data) {
         int bpm = _bleService.parseHeartRate(data);
@@ -134,7 +173,7 @@ class HealthProvider extends ChangeNotifier {
       });
     }
 
-    final spo2Stream = _bleService.subscribeToSpO2();
+    final spo2Stream = await _bleService.subscribeToSpO2();
     if (spo2Stream != null) {
       spo2Stream.listen((data) {
         int spo2 = _bleService.parseSpO2(data);

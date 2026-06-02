@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../constants/ble_constants.dart';
 import '../models/ble_device_model.dart';
@@ -27,7 +29,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
   /// Kiểm tra và xin quyền khi vừa mở app
   void _checkAndRequestPermissions() async {
-    bool hasPermission = await PermissionService.hasBluetoothPermission();
+    bool hasPermission = await PermissionService.hasBluetoothPermissions();
     if (!hasPermission) {
       bool granted = await PermissionService.requestBluetoothPermissions();
       if (granted) {
@@ -62,11 +64,16 @@ class _ScanScreenState extends State<ScanScreen> {
 
         for (var result in results) {
           // Tạo BleDeviceModel từ kết quả quét
+          final advName = result.advertisementData.advName;
+          final displayName = advName.isNotEmpty
+              ? advName
+              : (result.device.platformName.isNotEmpty
+                  ? result.device.platformName
+                  : result.device.remoteId.str);
+
           BleDeviceModel device = BleDeviceModel(
             device: result.device,
-            deviceName: result.device.platformName.isEmpty
-                ? result.device.remoteId.str
-                : result.device.platformName,
+            deviceName: displayName,
             deviceId: result.device.remoteId.str,
             rssi: result.rssi,
           );
@@ -98,7 +105,7 @@ class _ScanScreenState extends State<ScanScreen> {
       await Future.delayed(
           Duration(seconds: SCAN_TIMEOUT_SECONDS));
 
-      _stopScan();
+      await _stopScan();
     } catch (e) {
       setState(() {
         statusMessage = "Lỗi khi quét: $e";
@@ -333,7 +340,7 @@ class _ScanScreenState extends State<ScanScreen> {
   @override
   void dispose() {
     // Dừng quét khi thoát màn hình
-    _bleService.stopScan();
+    unawaited(_bleService.stopScan());
     super.dispose();
   }
 }

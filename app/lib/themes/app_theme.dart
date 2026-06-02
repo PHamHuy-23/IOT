@@ -28,7 +28,7 @@ class AppTheme {
           letterSpacing: 0.5,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: darkSlate,
         elevation: 8,
         shadowColor: neonCyan.withOpacity(0.2),

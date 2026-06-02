@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../painters/heart_rate_wave_painter.dart';
@@ -156,20 +158,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildActionButton(
-                    context,
+                    context: context,
                     label: 'Disconnect',
                     onPressed: () => provider.disconnectDevice(),
                     color: AppTheme.electricRed,
                   ),
                   _buildActionButton(
-                    context,
+                    context: context,
                     label: 'Reconnect',
                     onPressed: () => provider.autoConnectToWatch(),
                     color: AppTheme.accentPurple,
                   ),
                 ],
               ),
-            ] else if (!provider.isConnecting)
+            ] else if (!provider.isConnecting) ...[
+              if (Platform.isAndroid) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.withOpacity(0.4)),
+                  ),
+                  child: const Text(
+                    'Android: không ghép đôi ESP32 trong Cài đặt Bluetooth '
+                    '(sẽ báo "không thể giao tiếp"). Chỉ nhấn nút bên dưới. '
+                    'Bật GPS/Vị trí nếu không quét được.',
+                    style: TextStyle(fontSize: 12, height: 1.35),
+                  ),
+                ),
+              ],
               Padding(
                 padding: const EdgeInsets.only(top: 16),
                 child: SizedBox(
@@ -179,10 +199,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.accentPurple,
                     ),
-                    child: const Text('Connect Watch'),
+                    child: const Text('Kết nối đồng hồ'),
                   ),
                 ),
               ),
+            ],
           ],
         ),
       ),

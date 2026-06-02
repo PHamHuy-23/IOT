@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../constants/ble_constants.dart';
 
@@ -16,18 +19,109 @@ class BleService {
   BluetoothCharacteristic? _spo2Char;
   BluetoothCharacteristic? _timeSyncChar;
 
-  Stream<List<BluetoothDevice>> get connectedDevices =>
-      FlutterBluePlus.connectedDevices;
-
   bool isConnected() => _connectedDevice != null;
 
   BluetoothDevice? getConnectedDevice() => _connectedDevice;
+
+  List<BluetoothService>? getDiscoveredServices() => _discoveredServices;
+
+  Stream<List<ScanResult>> get scanResults => FlutterBluePlus.scanResults;
+
+  Future<void> _ensureAdapterOn() async {
+    final state = await FlutterBluePlus.adapterState.first;
+    if (state != BluetoothAdapterState.on) {
+      throw Exception("Bluetooth is off. Please enable Bluetooth.");
+    }
+  }
+
+  static bool isWatchAdvertisement(ScanResult result) {
+    final advName = result.advertisementData.advName;
+    final platformName = result.device.platformName;
+    return advName == TARGET_DEVICE_NAME || platformName == TARGET_DEVICE_NAME;
+  }
+
+  static bool isWatchDevice(BluetoothDevice device) {
+    return device.platformName == TARGET_DEVICE_NAME;
+  }
+
+  /// Scan for ESP32C3-Watch by advertisement name (works without system pairing).
+  Future<BluetoothDevice?> findWatchDevice({
+    Duration timeout = const Duration(seconds: SCAN_TIMEOUT_SECONDS),
+  }) async {
+    await _ensureAdapterOn();
+    await stopScan();
+
+    final completer = Completer<BluetoothDevice?>();
+    late final StreamSubscription<List<ScanResult>> subscription;
+
+    subscription = FlutterBluePlus.scanResults.listen((results) {
+      for (final result in results) {
+        if (!isWatchAdvertisement(result)) {
+          continue;
+        }
+        if (!completer.isCompleted) {
+          completer.complete(result.device);
+        }
+        return;
+      }
+    });
+
+    try {
+      print("🔍 Scanning for $TARGET_DEVICE_NAME...");
+      // Một số máy Android không trả kết quả khi dùng withNames.
+      if (Platform.isAndroid) {
+        await FlutterBluePlus.startScan(timeout: timeout);
+      } else {
+        await FlutterBluePlus.startScan(
+          withNames: [TARGET_DEVICE_NAME],
+          timeout: timeout,
+        );
+      }
+
+      return await completer.future.timeout(
+        timeout,
+        onTimeout: () => null,
+      );
+    } finally {
+      await subscription.cancel();
+      await stopScan();
+    }
+  }
+
+  Future<void> startScan() async {
+    try {
+      print("🔍 Starting BLE scan...");
+      await _ensureAdapterOn();
+
+      if (FlutterBluePlus.isScanningNow) {
+        await FlutterBluePlus.stopScan();
+      }
+
+      await FlutterBluePlus.startScan(
+        timeout: const Duration(seconds: SCAN_TIMEOUT_SECONDS),
+      );
+    } catch (e) {
+      print("✗ Start scan error: $e");
+      rethrow;
+    }
+  }
+
+  Future<void> stopScan() async {
+    try {
+      if (FlutterBluePlus.isScanningNow) {
+        await FlutterBluePlus.stopScan();
+      }
+    } catch (e) {
+      print("✗ Stop scan error: $e");
+      rethrow;
+    }
+  }
 
   Future<void> getSystemPairedDevices() async {
     try {
       print("🔍 Fetching bonded devices from system...");
 
-      List<BluetoothDevice> devices = await FlutterBluePlus.connectedDevices;
+      List<BluetoothDevice> devices = await FlutterBluePlus.bondedDevices;
       print("✓ Found ${devices.length} connected devices");
 
       for (var device in devices) {
@@ -41,23 +135,74 @@ class BleService {
 
   Future<List<BluetoothDevice>> getConnectedSystemDevices() async {
     try {
-      return await FlutterBluePlus.connectedDevices;
+      return await FlutterBluePlus.bondedDevices;
     } catch (e) {
       print("✗ Error getting connected devices: $e");
       rethrow;
     }
   }
 
+  Future<void> _clearAndroidBondIfAny(BluetoothDevice device) async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+    try {
+      final bond = await device.bondState.first
+          .timeout(const Duration(seconds: 2));
+      if (bond == BluetoothBondState.bonded) {
+        print("🔓 Removing stale Android bond before GATT connect...");
+        await device.removeBond();
+        await Future.delayed(const Duration(milliseconds: 800));
+      }
+    } catch (e) {
+      print("Bond clear skipped: $e");
+    }
+  }
+
+  Future<void> _gattConnect(BluetoothDevice device) async {
+    await device.connect(
+      timeout: const Duration(seconds: DEVICE_CONNECT_TIMEOUT_SECONDS),
+      autoConnect: false,
+    );
+  }
+
   Future<void> connectToDevice(BluetoothDevice device) async {
     try {
-      print("🔗 Connecting to: ${device.platformName}");
+      await _ensureAdapterOn();
+      await stopScan();
 
-      await device.connect(
-        timeout: const Duration(seconds: DEVICE_CONNECT_TIMEOUT_SECONDS),
-      );
+      final displayName = device.platformName.isEmpty
+          ? TARGET_DEVICE_NAME
+          : device.platformName;
+      print("🔗 Connecting to: $displayName");
+
+      // Ghép đôi trong Cài đặt Bluetooth Android thường tạo bond lỗi với ESP32.
+      await _clearAndroidBondIfAny(device);
+
+      try {
+        await _gattConnect(device);
+      } catch (e) {
+        if (!Platform.isAndroid) {
+          rethrow;
+        }
+        print("↻ GATT connect failed, retry after removeBond: $e");
+        try {
+          await device.removeBond();
+        } catch (_) {}
+        await Future.delayed(const Duration(milliseconds: 800));
+        await _gattConnect(device);
+      }
 
       _connectedDevice = device;
       print("✓ Connected successfully");
+
+      if (Platform.isAndroid) {
+        try {
+          await device.requestMtu(512);
+        } catch (e) {
+          print("MTU request skipped: $e");
+        }
+      }
 
       await discoverServices();
       await setupCharacteristics();
@@ -178,12 +323,12 @@ class BleService {
     return normalize(actual) == normalize(expected);
   }
 
-  Stream<List<int>>? subscribeToHeartRate() {
+  Future<Stream<List<int>>?> subscribeToHeartRate() async {
     if (_heartRateChar == null) return null;
 
     try {
       print("📡 Subscribing to heart rate...");
-      _heartRateChar!.setNotifyValue(true);
+      await _heartRateChar!.setNotifyValue(true);
       return _heartRateChar!.lastValueStream;
     } catch (e) {
       print("✗ Heart rate subscription error: $e");
@@ -191,16 +336,33 @@ class BleService {
     }
   }
 
-  Stream<List<int>>? subscribeToSpO2() {
+  Future<Stream<List<int>>?> subscribeToSpO2() async {
     if (_spo2Char == null) return null;
 
     try {
       print("📡 Subscribing to SpO2...");
-      _spo2Char!.setNotifyValue(true);
+      await _spo2Char!.setNotifyValue(true);
       return _spo2Char!.lastValueStream;
     } catch (e) {
       print("✗ SpO2 subscription error: $e");
       return null;
+    }
+  }
+
+  Future<Stream<List<int>>?> subscribeToCharacteristic(
+    String serviceUuid,
+    String characteristicUuid,
+  ) async {
+    final characteristic = getCharacteristic(serviceUuid, characteristicUuid);
+    if (characteristic == null) return null;
+
+    try {
+      print("📡 Subscribing to characteristic: $characteristicUuid");
+      await characteristic.setNotifyValue(true);
+      return characteristic.lastValueStream;
+    } catch (e) {
+      print("✗ Characteristic subscription error: $e");
+      rethrow;
     }
   }
 
@@ -260,30 +422,10 @@ class BleService {
   }
 
   Future<List<BluetoothDevice>> scanForDevice() async {
-    try {
-      print("🔍 Scanning for ESP32C3-Watch...");
-
-      await FlutterBluePlus.startScan(
-        timeout: const Duration(seconds: SCAN_TIMEOUT_SECONDS),
-        withConnected: true,
-      );
-
-      await for (var result in FlutterBluePlus.scanResults) {
-        final matching = result
-            .where((r) => r.device.platformName == TARGET_DEVICE_NAME)
-            .toList();
-        if (matching.isNotEmpty) {
-          await FlutterBluePlus.stopScan();
-          print("✓ Found ESP32C3-Watch during scan");
-          return matching.map((r) => r.device).toList();
-        }
-      }
-
-      await FlutterBluePlus.stopScan();
-      return [];
-    } catch (e) {
-      print("✗ Scan error: $e");
+    final device = await findWatchDevice();
+    if (device == null) {
       return [];
     }
+    return [device];
   }
 }
