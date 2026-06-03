@@ -31,7 +31,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: darkSlate,
         elevation: 8,
-        shadowColor: neonCyan.withOpacity(0.2),
+        shadowColor: neonCyan.withValues(alpha: 0.2),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(
@@ -49,7 +49,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           elevation: 8,
-          shadowColor: accentPurple.withOpacity(0.4),
+          shadowColor: accentPurple.withValues(alpha: 0.4),
         ),
       ),
       textTheme: const TextTheme(
@@ -91,7 +91,6 @@ class AppTheme {
         secondary: neonCyan,
         tertiary: neonGreen,
         surface: darkSlate,
-        background: deepObsidian,
         error: electricRed,
       ),
     );

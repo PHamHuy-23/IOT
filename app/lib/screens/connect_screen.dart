@@ -10,10 +10,10 @@ class ConnectScreen extends StatefulWidget {
   final BleService bleService;
 
   const ConnectScreen({
-    Key? key,
+    super.key,
     required this.device,
     required this.bleService,
-  }) : super(key: key);
+  });
 
   @override
   State<ConnectScreen> createState() => _ConnectScreenState();
@@ -285,7 +285,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("${widget.device.getDisplayName()}"),
+        title: Text(widget.device.getDisplayName()),
         centerTitle: true,
         elevation: 2,
       ),

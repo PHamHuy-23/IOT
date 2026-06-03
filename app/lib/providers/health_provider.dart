@@ -12,7 +12,7 @@ class HealthProvider extends ChangeNotifier {
 
   int _heartRate = 0;
   int _spO2 = 0;
-  HeartRateHistory _heartRateHistory = HeartRateHistory(
+  final HeartRateHistory _heartRateHistory = HeartRateHistory(
     values: [],
     timestamps: [],
   );

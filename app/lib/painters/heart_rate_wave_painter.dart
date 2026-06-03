@@ -27,7 +27,7 @@ class HeartRateWavePainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
 
     final fillPaint = Paint()
-      ..color = fillColor.withOpacity(0.15)
+      ..color = fillColor.withValues(alpha: 0.15)
       ..style = PaintingStyle.fill;
 
     final path = _buildWavePath(size);
@@ -87,7 +87,7 @@ class HeartRateWavePainter extends CustomPainter {
 
   void _drawGridLines(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.05)
+      ..color = Colors.white.withValues(alpha: 0.05)
       ..strokeWidth = 0.5;
 
     const int gridLines = 4;
@@ -101,7 +101,7 @@ class HeartRateWavePainter extends CustomPainter {
 
   void _drawEmptyState(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.grey.withOpacity(0.3)
+      ..color = Colors.grey.withValues(alpha: 0.3)
       ..style = PaintingStyle.fill;
 
     canvas.drawRect(

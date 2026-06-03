@@ -53,12 +53,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     backgroundColor: isConnected
-                        ? AppTheme.neonGreen.withOpacity(0.1)
-                        : AppTheme.mutedGrey.withOpacity(0.1),
+                        ? AppTheme.neonGreen.withValues(alpha: 0.1)
+                        : AppTheme.mutedGrey.withValues(alpha: 0.1),
                     side: BorderSide(
                       color: isConnected
-                          ? AppTheme.neonGreen.withOpacity(0.3)
-                          : AppTheme.mutedGrey.withOpacity(0.3),
+                          ? AppTheme.neonGreen.withValues(alpha: 0.3)
+                          : AppTheme.mutedGrey.withValues(alpha: 0.3),
                     ),
                   );
                 },
@@ -123,7 +123,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     boxShadow: provider.isConnected
                         ? [
                             BoxShadow(
-                              color: AppTheme.neonGreen.withOpacity(0.6),
+                              color: AppTheme.neonGreen.withValues(alpha: 0.6),
                               blurRadius: 8,
                               spreadRadius: 2,
                             )
@@ -178,9 +178,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.12),
+                    color: Colors.orange.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.withOpacity(0.4)),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
                   ),
                   child: const Text(
                     'Android: không ghép đôi ESP32 trong Cài đặt Bluetooth '
@@ -254,10 +254,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: AppTheme.getHeartRateColor(provider.heartRate)
-                        .withOpacity(0.15),
+                        .withValues(alpha: 0.15),
                     border: Border.all(
                       color: AppTheme.getHeartRateColor(provider.heartRate)
-                          .withOpacity(0.4),
+                          .withValues(alpha: 0.4),
                     ),
                   ),
                   child: Icon(
@@ -425,7 +425,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: const EdgeInsets.symmetric(vertical: 16),
           backgroundColor: provider.isConnected
               ? AppTheme.accentPurple
-              : AppTheme.mutedGrey.withOpacity(0.3),
+              : AppTheme.mutedGrey.withValues(alpha: 0.3),
           foregroundColor: provider.isConnected
               ? AppTheme.softWhite
               : AppTheme.mutedGrey,
@@ -438,9 +438,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.electricRed.withOpacity(0.1),
+        color: AppTheme.electricRed.withValues(alpha: 0.1),
         border: Border.all(
-          color: AppTheme.electricRed.withOpacity(0.5),
+          color: AppTheme.electricRed.withValues(alpha: 0.5),
         ),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -476,9 +476,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppTheme.darkSlate.withOpacity(0.5),
+        color: AppTheme.darkSlate.withValues(alpha: 0.5),
         border: Border.all(
-          color: AppTheme.neonCyan.withOpacity(0.2),
+          color: AppTheme.neonCyan.withValues(alpha: 0.2),
         ),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -513,9 +513,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: ElevatedButton(
           onPressed: onPressed,
           style: ElevatedButton.styleFrom(
-            backgroundColor: color.withOpacity(0.2),
+            backgroundColor: color.withValues(alpha: 0.2),
             foregroundColor: color,
-            side: BorderSide(color: color.withOpacity(0.5)),
+            side: BorderSide(color: color.withValues(alpha: 0.5)),
             padding: const EdgeInsets.symmetric(vertical: 12),
           ),
           child: Text(label, style: const TextStyle(fontSize: 12)),
@@ -550,7 +550,7 @@ class _CircularProgressPainter extends CustomPainter {
     final radius = size.width / 2 - 8;
 
     final backgroundPaint = Paint()
-      ..color = AppTheme.darkSlate.withOpacity(0.5)
+      ..color = AppTheme.darkSlate.withValues(alpha: 0.5)
       ..strokeWidth = 4
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;

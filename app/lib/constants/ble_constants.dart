@@ -1,4 +1,5 @@
 /// Các hằng số và UUID dùng cho BLE communication với ESP32C3-Watch
+library;
 
 // ============ Device Configuration ============
 const String TARGET_DEVICE_NAME = "ESP32C3-Watch";
