@@ -1,14 +1,22 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/ble_constants.dart';
 import '../models/health_metrics.dart';
 import '../services/ble_service.dart';
 import '../services/permission_service.dart';
 
 class HealthProvider extends ChangeNotifier {
+  static const String _savedWatchIdKey = 'saved_watch_id';
+  static const int _maxRetries = 5;
+
   final BleService _bleService = BleService();
+  
+  StreamSubscription? _connectionStateSubscription;
+  int _retryCount = 0;
 
   int _heartRate = 0;
   int _spO2 = 0;
@@ -43,6 +51,16 @@ class HealthProvider extends ChangeNotifier {
     });
   }
 
+  Future<String?> _loadSavedWatchId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_savedWatchIdKey);
+  }
+
+  Future<void> _saveWatchId(String watchId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_savedWatchIdKey, watchId);
+  }
+
   Future<void> autoConnectToWatch() async {
     try {
       _setConnecting(true);
@@ -66,6 +84,20 @@ class HealthProvider extends ChangeNotifier {
         _setConnecting(false);
         notifyListeners();
         return;
+      }
+
+      final savedWatchId = await _loadSavedWatchId();
+      if (savedWatchId != null) {
+        _connectionStatus = "Đang kết nối lại với đồng hồ quen...";
+        notifyListeners();
+
+        try {
+          final device = BluetoothDevice.fromId(savedWatchId);
+          await connectToDevice(device);
+          return;
+        } catch (e) {
+          print("Kết nối lại nhanh thất bại, chuyển sang quét mới: $e");
+        }
       }
 
       // Reuse an existing GATT connection if the watch is already connected.
@@ -118,10 +150,41 @@ class HealthProvider extends ChangeNotifier {
       notifyListeners();
 
       await _bleService.connectToDevice(device);
+      await _saveWatchId(device.remoteId.str);
 
       _connectedDevice = device;
       _isConnected = true;
+      _retryCount = 0;
       _connectionStatus = "Connected to ${device.platformName}";
+
+      // Cancel previous subscription if any
+      await _connectionStateSubscription?.cancel();
+      
+      // Listen for disconnection and auto-reconnect
+      _connectionStateSubscription = device.connectionState.listen((state) {
+        if (state == BluetoothConnectionState.disconnected) {
+          _isConnected = false;
+          _connectedDevice = null;
+          _connectionStatus = "Mất kết nối, đang thử lại...";
+          _heartRate = 0;
+          _spO2 = 0;
+          _heartRateHistory.clear();
+          notifyListeners();
+
+          // Auto-reconnect with retry limit
+          Future.delayed(const Duration(seconds: 3), () async {
+            if (!_isConnected && !_isConnecting && _retryCount < _maxRetries) {
+              _retryCount++;
+              print("🔄 Auto-reconnect attempt $_retryCount/$_maxRetries");
+              await autoConnectToWatch();
+            } else if (_retryCount >= _maxRetries) {
+              _connectionStatus = "Kết nối thất bại sau $_maxRetries lần thử. Hãy kết nối lại thủ công.";
+              notifyListeners();
+              print("✗ Auto-reconnect exceeded max retries");
+            }
+          });
+        }
+      });
 
       await _subscribeToHealthMetrics();
       await syncTimeToWatch();
@@ -141,6 +204,11 @@ class HealthProvider extends ChangeNotifier {
   Future<void> disconnectDevice() async {
     try {
       _setConnecting(true);
+      
+      // Cancel connection state subscription
+      await _connectionStateSubscription?.cancel();
+      _connectionStateSubscription = null;
+      
       await _bleService.unsubscribeFromHeartRate();
       await _bleService.unsubscribeFromSpO2();
       await _bleService.disconnectDevice();
@@ -152,6 +220,7 @@ class HealthProvider extends ChangeNotifier {
       _spO2 = 0;
       _heartRateHistory.clear();
       _errorMessage = "";
+      _retryCount = 0;
 
       _setConnecting(false);
       notifyListeners();
@@ -225,6 +294,7 @@ class HealthProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _connectionStateSubscription?.cancel();
     if (_isConnected) {
       disconnectDevice();
     }

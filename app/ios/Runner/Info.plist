@@ -53,6 +53,8 @@
 	<string>Ứng dụng cần truy cập Bluetooth để quét và kết nối với thiết bị đo sức khỏe</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Ứng dụng cần truy cập vị trí để quét thiết bị Bluetooth</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Ứng dụng cần truy cập vị trí để quét thiết bị Bluetooth</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

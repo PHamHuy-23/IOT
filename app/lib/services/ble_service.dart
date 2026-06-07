@@ -161,8 +161,8 @@ class BleService {
 
   Future<void> _gattConnect(BluetoothDevice device) async {
     await device.connect(
-      timeout: const Duration(seconds: DEVICE_CONNECT_TIMEOUT_SECONDS),
       autoConnect: false,
+      timeout: const Duration(seconds: DEVICE_CONNECT_TIMEOUT_SECONDS),
     );
   }
 
@@ -427,5 +427,10 @@ class BleService {
       return [];
     }
     return [device];
+  }
+
+  Stream<BluetoothConnectionState> get connectionStateStream {
+    if (_connectedDevice == null) return const Stream.empty();
+    return _connectedDevice!.connectionState;
   }
 }

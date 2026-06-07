@@ -1,23 +1,18 @@
 import 'dart:io' show Platform;
-
 import 'package:permission_handler/permission_handler.dart';
 
 class PermissionService {
   static bool get isAndroid => Platform.isAndroid;
 
-  /// Many Android phones block BLE scan unless system Location (GPS) is ON.
   static Future<bool> isLocationServiceEnabled() async {
-    if (!isAndroid) {
-      return true;
-    }
+    if (!isAndroid) return true;
     final status = await Permission.location.serviceStatus;
     return status == ServiceStatus.enabled;
   }
 
   static Future<String?> androidBleReadinessIssue() async {
-    if (!isAndroid) {
-      return null;
-    }
+    if (!isAndroid) return null;
+
     if (!await hasBluetoothPermissions()) {
       return 'Cấp quyền Bluetooth và Vị trí cho app trong Cài đặt.';
     }
@@ -26,22 +21,31 @@ class PermissionService {
     }
     return null;
   }
+
   static Future<bool> requestBluetoothPermissions() async {
     try {
       print('📋 Requesting BLE permissions...');
 
-      Map<Permission, PermissionStatus> statuses = await [
-        Permission.bluetooth,
+      final permissions = <Permission>[
         Permission.bluetoothConnect,
         Permission.bluetoothScan,
         Permission.location,
-      ].request();
+      ];
 
-      final allGranted = statuses.values.every(
-        (status) => status.isGranted,
-      );
+      // Thêm Bluetooth cho Android < 12
+      if (Platform.isAndroid) {
+        permissions.add(Permission.bluetooth);
+      }
 
-      if (allGranted) {
+      final statuses = await permissions.request();
+
+      final bleConnectGranted = await Permission.bluetoothConnect.isGranted;
+      final bleScanGranted = await Permission.bluetoothScan.isGranted;
+      final locationGranted = await Permission.location.isGranted;
+
+      final allCriticalGranted = bleConnectGranted && bleScanGranted && locationGranted;
+
+      if (allCriticalGranted) {
         print('✓ All BLE permissions granted');
         return true;
       } else {
@@ -59,23 +63,22 @@ class PermissionService {
 
   static Future<bool> hasBluetoothPermissions() async {
     try {
-      const permissions = [
-        Permission.bluetooth,
-        Permission.bluetoothConnect,
-        Permission.bluetoothScan,
-        Permission.location,
-      ];
+      final bleConnectGranted = await Permission.bluetoothConnect.isGranted;
+      final bleScanGranted = await Permission.bluetoothScan.isGranted;
+      final locationGranted = await Permission.location.isGranted;
 
-      for (final permission in permissions) {
-        if (!(await permission.status).isGranted) {
-          return false;
-        }
-      }
-      return true;
+      // Tất cả 3 quyền này bắt buộc để quét BLE trên Android 12+
+      return bleConnectGranted && bleScanGranted && locationGranted;
     } catch (e) {
       print('✗ Permission check error: $e');
       return false;
     }
+  }
+
+  static Future<bool> canRequestLocationService() async {
+    if (!isAndroid) return false;
+    final status = await Permission.location.serviceStatus;
+    return status == ServiceStatus.disabled;
   }
 
   static Future<void> openAppSettingsPage() async {

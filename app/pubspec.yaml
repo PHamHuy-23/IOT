@@ -13,6 +13,8 @@ dependencies:
   flutter_blue_plus: ^1.31.1
   # Runtime permissions
   permission_handler: ^12.0.2
+  # Key-value storage
+  shared_preferences: ^2.2.0
   # State Management
   provider: ^6.0.0
   # Charts for heart rate visualization

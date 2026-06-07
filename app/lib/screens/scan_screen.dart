@@ -1,13 +1,12 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import '../constants/ble_constants.dart';
 import '../models/ble_device_model.dart';
 import '../services/permission_service.dart';
 import '../services/ble_service.dart';
+import '../themes/app_theme.dart';
 import 'connect_screen.dart';
 
-/// Màn hình quét và hiển thị danh sách thiết bị BLE
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
 
@@ -15,332 +14,536 @@ class ScanScreen extends StatefulWidget {
   State<ScanScreen> createState() => _ScanScreenState();
 }
 
-class _ScanScreenState extends State<ScanScreen> {
+class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   final BleService _bleService = BleService();
   List<BleDeviceModel> discoveredDevices = [];
   bool isScanning = false;
-  String statusMessage = "Nhấn nút để bắt đầu quét";
+  String statusMessage = 'Nhấn nút để bắt đầu quét';
+  String? permissionError;
+
+  // Animation cho nút scan (pulse khi đang quét)
+  late AnimationController _scanPulseCtrl;
+  late Animation<double> _scanPulseAnim;
 
   @override
   void initState() {
     super.initState();
-    _checkAndRequestPermissions();
-  }
-
-  /// Kiểm tra và xin quyền khi vừa mở app
-  void _checkAndRequestPermissions() async {
-    bool hasPermission = await PermissionService.hasBluetoothPermissions();
-    if (!hasPermission) {
-      bool granted = await PermissionService.requestBluetoothPermissions();
-      if (granted) {
-        setState(() {
-          statusMessage = "Quyền đã được cấp. Sẵn sàng quét.";
-        });
-      } else {
-        setState(() {
-          statusMessage = "Quyền bị từ chối. Vui lòng cấp quyền trong cài đặt.";
-        });
-      }
-    }
-  }
-
-  /// Bắt đầu quét thiết bị BLE
-  void _startScan() async {
-    // Xóa danh sách thiết bị cũ
-    discoveredDevices.clear();
-
-    setState(() {
-      isScanning = true;
-      statusMessage = "Đang quét thiết bị...";
-    });
-
-    try {
-      // Bắt đầu quét
-      await _bleService.startScan();
-
-      // Lắng nghe sự kiện phát hiện thiết bị
-      _bleService.scanResults.listen((results) {
-        List<BleDeviceModel> newDevices = [];
-
-        for (var result in results) {
-          // Tạo BleDeviceModel từ kết quả quét
-          final advName = result.advertisementData.advName;
-          final displayName = advName.isNotEmpty
-              ? advName
-              : (result.device.platformName.isNotEmpty
-                  ? result.device.platformName
-                  : result.device.remoteId.str);
-
-          BleDeviceModel device = BleDeviceModel(
-            device: result.device,
-            deviceName: displayName,
-            deviceId: result.device.remoteId.str,
-            rssi: result.rssi,
-          );
-
-          // Kiểm tra xem thiết bị đã tồn tại trong danh sách chưa
-          bool exists = newDevices
-              .any((d) => d.deviceId == device.deviceId);
-          if (!exists) {
-            newDevices.add(device);
-          }
-        }
-
-        setState(() {
-          // Cập nhật danh sách, loại bỏ duplicates
-          for (var newDevice in newDevices) {
-            bool alreadyExists = discoveredDevices
-                .any((d) => d.deviceId == newDevice.deviceId);
-            if (!alreadyExists) {
-              discoveredDevices.add(newDevice);
-            }
-          }
-
-          statusMessage =
-              "Tìm thấy ${discoveredDevices.length} thiết bị";
-        });
-      });
-
-      // Tự động dừng quét sau SCAN_TIMEOUT_SECONDS giây
-      await Future.delayed(
-          Duration(seconds: SCAN_TIMEOUT_SECONDS));
-
-      await _stopScan();
-    } catch (e) {
-      setState(() {
-        statusMessage = "Lỗi khi quét: $e";
-        isScanning = false;
-      });
-    }
-  }
-
-  /// Dừng quét thiết bị
-  Future<void> _stopScan() async {
-    try {
-      await _bleService.stopScan();
-      setState(() {
-        isScanning = false;
-        if (discoveredDevices.isEmpty) {
-          statusMessage = "Quét xong. Không tìm thấy thiết bị.";
-        } else {
-          statusMessage =
-              "Quét xong. Tìm thấy ${discoveredDevices.length} thiết bị.";
-        }
-      });
-    } catch (e) {
-      setState(() {
-        statusMessage = "Lỗi khi dừng quét: $e";
-      });
-    }
-  }
-
-  /// Kết nối đến một thiết bị
-  void _connectToDevice(BleDeviceModel device) async {
-    setState(() {
-      device.isConnecting = true;
-    });
-
-    try {
-      // Kết nối đến thiết bị
-      await _bleService.connectToDevice(device.device);
-
-      // Cập nhật trạng thái
-      setState(() {
-        device.updateConnectionStatus(true);
-      });
-
-      // Dừng quét vì đã kết nối thành công
-      await _stopScan();
-
-      // Điều hướng sang màn hình kết nối
-      if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => ConnectScreen(
-              device: device,
-              bleService: _bleService,
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() {
-        device.isConnecting = false;
-        statusMessage = "Lỗi kết nối: $e";
-      });
-
-      // Hiển thị dialog lỗi
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Không thể kết nối: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    _scanPulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _scanPulseAnim = Tween<double>(begin: 1.0, end: 1.12).animate(
+      CurvedAnimation(parent: _scanPulseCtrl, curve: Curves.easeInOut),
+    );
+    _checkPermissions();
   }
 
   @override
+  void dispose() {
+    _scanPulseCtrl.dispose();
+    unawaited(_bleService.stopScan());
+    super.dispose();
+  }
+
+  // ── Permissions ──────────────────────────────────────────
+  Future<void> _checkPermissions() async {
+    bool has = await PermissionService.hasBluetoothPermissions();
+    if (has) {
+      setState(() => permissionError = null);
+      return;
+    }
+    final issue = await PermissionService.androidBleReadinessIssue();
+    if (issue != null) {
+      setState(() => permissionError = issue);
+      return;
+    }
+    bool granted = await PermissionService.requestBluetoothPermissions();
+    if (!granted) {
+      final err = await PermissionService.androidBleReadinessIssue();
+      setState(() => permissionError = err ?? 'Cần quyền Bluetooth và Vị trí.');
+    }
+  }
+
+  // ── Scan ─────────────────────────────────────────────────
+  void _startScan() async {
+    final issue = await PermissionService.androidBleReadinessIssue();
+    if (issue != null) {
+      setState(() => permissionError = issue);
+      return;
+    }
+
+    setState(() {
+      discoveredDevices.clear();
+      isScanning = true;
+      statusMessage = 'Đang quét...';
+    });
+    _scanPulseCtrl.repeat(reverse: true);
+
+    try {
+      await _bleService.startScan();
+      _bleService.scanResults.listen((results) {
+        final newDevices = <BleDeviceModel>[];
+        for (final r in results) {
+          final name = r.advertisementData.advName.isNotEmpty
+              ? r.advertisementData.advName
+              : (r.device.platformName.isNotEmpty
+                  ? r.device.platformName
+                  : r.device.remoteId.str);
+          final d = BleDeviceModel(
+            device: r.device,
+            deviceName: name,
+            deviceId: r.device.remoteId.str,
+            rssi: r.rssi,
+          );
+          if (!newDevices.any((x) => x.deviceId == d.deviceId)) {
+            newDevices.add(d);
+          }
+        }
+        setState(() {
+          for (final d in newDevices) {
+            if (!discoveredDevices.any((x) => x.deviceId == d.deviceId)) {
+              discoveredDevices.add(d);
+            }
+          }
+          statusMessage = 'Tìm thấy ${discoveredDevices.length} thiết bị';
+        });
+      });
+
+      await Future.delayed(Duration(seconds: SCAN_TIMEOUT_SECONDS));
+      await _stopScan();
+    } catch (e) {
+      setState(() {
+        statusMessage = 'Lỗi khi quét: $e';
+        isScanning = false;
+      });
+      _scanPulseCtrl.stop();
+    }
+  }
+
+  Future<void> _stopScan() async {
+    try {
+      await _bleService.stopScan();
+    } catch (_) {}
+    _scanPulseCtrl.stop();
+    _scanPulseCtrl.reset();
+    setState(() {
+      isScanning = false;
+      statusMessage = discoveredDevices.isEmpty
+          ? 'Không tìm thấy thiết bị nào.'
+          : 'Tìm thấy ${discoveredDevices.length} thiết bị.';
+    });
+  }
+
+  // ── Connect ───────────────────────────────────────────────
+  void _connectToDevice(BleDeviceModel device) async {
+    setState(() => device.isConnecting = true);
+    try {
+      await _bleService.connectToDevice(device.device);
+      setState(() => device.updateConnectionStatus(true));
+      await _stopScan();
+      if (mounted) {
+        Navigator.of(context).push(
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => ConnectScreen(
+              device: device,
+              bleService: _bleService,
+            ),
+            transitionsBuilder: (_, anim, __, child) => SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(1, 0),
+                end: Offset.zero,
+              ).animate(
+                  CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+              child: child,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => device.isConnecting = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không thể kết nối: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // BUILD
+  // ══════════════════════════════════════════════════════════
+  @override
   Widget build(BuildContext context) {
+    if (permissionError != null) return _buildPermissionError();
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Quét Thiết bị BLE"),
-        centerTitle: true,
-        elevation: 2,
+      backgroundColor: AppTheme.black,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            _buildScanButton(),
+            Expanded(child: _buildDeviceList()),
+          ],
+        ),
       ),
-      body: Column(
+    );
+  }
+
+  // ── Header ───────────────────────────────────────────────
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // ===== Phần Status =====
+          const Text(
+            'Quét thiết bị',
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold),
+          ),
+          // Status chip
           Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.blue[50],
-            child: Column(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1C1C1E),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  statusMessage,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isScanning
+                        ? AppTheme.accentOrange
+                        : discoveredDevices.isNotEmpty
+                            ? AppTheme.neonGreen
+                            : AppTheme.mutedGrey,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 12),
-                // Nút Bắt đầu/Dừng quét
-                ElevatedButton.icon(
-                  onPressed: isScanning ? _stopScan : _startScan,
-                  icon: Icon(
-                    isScanning ? Icons.stop : Icons.bluetooth_searching,
-                  ),
-                  label: Text(
-                    isScanning ? "Dừng Quét" : "Bắt Đầu Quét",
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isScanning ? Colors.red : Colors.blue,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                  ),
+                const SizedBox(width: 6),
+                Text(
+                  isScanning
+                      ? 'Đang quét'
+                      : discoveredDevices.isNotEmpty
+                          ? '${discoveredDevices.length} thiết bị'
+                          : 'Chờ quét',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600),
                 ),
               ],
             ),
-          ),
-
-          // ===== Phần Danh Sách Thiết bị =====
-          Expanded(
-            child: discoveredDevices.isEmpty
-                ? Center(
-                    child: Text(
-                      isScanning
-                          ? "Đang quét thiết bị...\n\nVui lòng chờ..."
-                          : "Nhấn 'Bắt Đầu Quét' để tìm thiết bị",
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(8),
-                    itemCount: discoveredDevices.length,
-                    itemBuilder: (context, index) {
-                      BleDeviceModel device = discoveredDevices[index];
-
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 6,
-                        ),
-                        child: ListTile(
-                          // Biểu tượng thiết bị
-                          leading: Icon(
-                            device.isConnected
-                                ? Icons.bluetooth_connected
-                                : Icons.bluetooth,
-                            color: device.isConnected
-                                ? Colors.green
-                                : Colors.blue,
-                            size: 28,
-                          ),
-
-                          // Tên thiết bị
-                          title: Text(
-                            device.getDisplayName(),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-
-                          // MAC Address & Tín hiệu
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 4),
-                              Text(
-                                "ID: ${device.deviceId}",
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              Text(
-                                "Tín hiệu: ${device.rssi} dBm (${device.getSignalStrength()})",
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          // Nút Kết nối
-                          trailing: device.isConnecting
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : ElevatedButton(
-                                  onPressed: device.isConnected
-                                      ? null
-                                      : () => _connectToDevice(device),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: device.isConnected
-                                        ? Colors.green
-                                        : Colors.blue,
-                                    disabledBackgroundColor: Colors.green,
-                                  ),
-                                  child: Text(
-                                    device.isConnected
-                                        ? "Đã Kết Nối"
-                                        : "Kết Nối",
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                        ),
-                      );
-                    },
-                  ),
           ),
         ],
       ),
     );
   }
 
-  @override
-  void dispose() {
-    // Dừng quét khi thoát màn hình
-    unawaited(_bleService.stopScan());
-    super.dispose();
+  // ── Scan button ──────────────────────────────────────────
+  Widget _buildScanButton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      child: ScaleTransition(
+        scale: isScanning ? _scanPulseAnim : const AlwaysStoppedAnimation(1.0),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: isScanning ? _stopScan : _startScan,
+            icon: Icon(
+              isScanning
+                  ? Icons.stop_rounded
+                  : Icons.bluetooth_searching_rounded,
+              size: 20,
+            ),
+            label: Text(
+              isScanning ? 'Dừng quét' : 'Bắt đầu quét',
+              style: const TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  isScanning ? Colors.redAccent : AppTheme.accentRed,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Device list ──────────────────────────────────────────
+  Widget _buildDeviceList() {
+    if (discoveredDevices.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isScanning
+                  ? Icons.radar_rounded
+                  : Icons.bluetooth_disabled_rounded,
+              size: 56,
+              color: AppTheme.mutedGrey.withOpacity(0.4),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              isScanning
+                  ? 'Đang tìm kiếm thiết bị...'
+                  : 'Nhấn "Bắt đầu quét"\nđể tìm thiết bị BLE',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: AppTheme.mutedGrey,
+                  fontSize: 14,
+                  height: 1.5),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      physics: const BouncingScrollPhysics(),
+      itemCount: discoveredDevices.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, i) => _buildDeviceCard(discoveredDevices[i]),
+    );
+  }
+
+  // ── Device card ──────────────────────────────────────────
+  Widget _buildDeviceCard(BleDeviceModel device) {
+    final bars = device.rssi >= -60
+        ? 4
+        : device.rssi >= -75
+            ? 3
+            : device.rssi >= -85
+                ? 2
+                : 1;
+    final signalColor = bars >= 3
+        ? AppTheme.neonGreen
+        : bars == 2
+            ? AppTheme.accentOrange
+            : Colors.redAccent;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.circular(18),
+        border: device.isConnected
+            ? Border.all(color: AppTheme.neonGreen.withOpacity(0.4), width: 1)
+            : null,
+      ),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: device.isConnected
+                  ? AppTheme.neonGreen.withOpacity(0.12)
+                  : AppTheme.accentRed.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              device.isConnected
+                  ? Icons.bluetooth_connected_rounded
+                  : Icons.bluetooth_rounded,
+              color: device.isConnected
+                  ? AppTheme.neonGreen
+                  : AppTheme.accentRed,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  device.getDisplayName(),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  device.deviceId,
+                  style: const TextStyle(
+                      color: AppTheme.mutedGrey, fontSize: 11),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 5),
+                // Signal bars mini
+                Row(
+                  children: [
+                    ...List.generate(4, (i) => Container(
+                          width: 3.5,
+                          height: 5.0 + i * 2.5,
+                          margin: const EdgeInsets.only(right: 2),
+                          decoration: BoxDecoration(
+                            color: i < bars
+                                ? signalColor
+                                : AppTheme.subtleGrey,
+                            borderRadius: BorderRadius.circular(1),
+                          ),
+                        )),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${device.rssi} dBm',
+                      style: TextStyle(
+                          color: signalColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // Connect button
+          device.isConnecting
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppTheme.accentRed,
+                  ),
+                )
+              : GestureDetector(
+                  onTap: device.isConnected
+                      ? null
+                      : () => _connectToDevice(device),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: device.isConnected
+                          ? AppTheme.neonGreen.withOpacity(0.12)
+                          : AppTheme.accentRed,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      device.isConnected ? 'Đã kết nối' : 'Kết nối',
+                      style: TextStyle(
+                        color: device.isConnected
+                            ? AppTheme.neonGreen
+                            : Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+
+  // ── Permission error screen ───────────────────────────────
+  Widget _buildPermissionError() {
+    return Scaffold(
+      backgroundColor: AppTheme.black,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.bluetooth_disabled_rounded,
+                    size: 40, color: Colors.redAccent),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Cần quyền truy cập',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                permissionError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: AppTheme.mutedGrey,
+                    fontSize: 14,
+                    height: 1.5),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await PermissionService.openAppSettingsPage();
+                    await Future.delayed(const Duration(milliseconds: 500));
+                    if (mounted) _checkPermissions();
+                  },
+                  icon: const Icon(Icons.settings_rounded, size: 18),
+                  label: const Text('Mở Cài đặt',
+                      style: TextStyle(fontSize: 15)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accentRed,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _checkPermissions,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Kiểm tra lại'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.mutedGrey,
+                    side: const BorderSide(color: AppTheme.subtleGrey),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

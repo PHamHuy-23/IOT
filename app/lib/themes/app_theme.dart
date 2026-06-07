@@ -1,115 +1,81 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // Dark Mode - Medical/Fitness Dashboard Colors
-  static const Color deepObsidian = Color(0xFF0B0E1B);
-  static const Color darkSlate = Color(0xFF1A1F3A);
-  static const Color neonCyan = Color(0xFF00D9FF);
-  static const Color neonGreen = Color(0xFF00FF88);
-  static const Color electricRed = Color(0xFFFF1744);
-  static const Color electricPink = Color(0xFFFF4081);
-  static const Color accentPurple = Color(0xFF7C3AED);
-  static const Color softWhite = Color(0xFFE8E8E8);
-  static const Color mutedGrey = Color(0xFF6B7280);
+  // ===== Màu nền =====
+  static const Color black = Color(0xFF000000);
+  static const Color cardDark = Color(0xFF1C1C1E);
+  static const Color cardDarker = Color(0xFF2C2C2E);
 
-  static ThemeData get darkTheme {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: deepObsidian,
-      appBarTheme: AppBarTheme(
-        backgroundColor: darkSlate,
-        elevation: 0,
-        centerTitle: true,
-        titleTextStyle: const TextStyle(
-          color: softWhite,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
-      ),
-      cardTheme: CardThemeData(
-        color: darkSlate,
-        elevation: 8,
-        shadowColor: neonCyan.withValues(alpha: 0.2),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(
-            color: neonCyan,
-            width: 0.5,
-          ),
-        ),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: accentPurple,
-          foregroundColor: softWhite,
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 8,
-          shadowColor: accentPurple.withValues(alpha: 0.4),
-        ),
-      ),
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(
-          color: softWhite,
-          fontSize: 32,
-          fontWeight: FontWeight.bold,
-          letterSpacing: -0.5,
-        ),
-        displayMedium: TextStyle(
-          color: softWhite,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-        ),
-        titleLarge: TextStyle(
-          color: softWhite,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-        ),
-        bodyLarge: TextStyle(
-          color: softWhite,
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-        ),
-        bodyMedium: TextStyle(
-          color: mutedGrey,
-          fontSize: 14,
-          fontWeight: FontWeight.w400,
-        ),
-        labelSmall: TextStyle(
-          color: mutedGrey,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 0.5,
-        ),
-      ),
-      colorScheme: const ColorScheme.dark(
-        primary: accentPurple,
-        secondary: neonCyan,
-        tertiary: neonGreen,
-        surface: darkSlate,
-        error: electricRed,
-      ),
-    );
+  // ===== Màu accent =====
+  static const Color accentRed = Color(0xFFFF2D55);    // Nhịp tim / Tab active
+  static const Color electricRed = Color(0xFFFF1744);  // High-alert / electric red (IMPLEMENTATION_GUIDE)
+  static const Color accentBlue = Color(0xFF007AFF);   // Nước uống
+  static const Color accentGreen = Color(0xFF34C759);  // Bước chân
+  static const Color accentOrange = Color(0xFFFF9500); // Năng lượng
+  static const Color accentPurple = Color(0xFFAF52DE); // Giấc ngủ
+  static const Color accentTeal = Color(0xFF00C7B7);   // SpO2 / Chánh niệm
+  static const Color neonGreen = Color(0xFF30D158);    // Trạng thái kết nối
+
+  // ===== Màu chữ =====
+  static const Color softWhite = Color(0xFFFFFFFF);
+  static const Color mutedGrey = Color(0xFF8E8E93);
+  static const Color subtleGrey = Color(0xFF3A3A3C);
+
+  // ===== Helper: màu theo nhịp tim =====
+  static Color getHeartRateColor(int hr) {
+    if (hr == 0) return mutedGrey;
+    if (hr < 60) return accentBlue;
+    if (hr <= 100) return accentRed;
+    return const Color(0xFFFF6B6B);
   }
 
-  // Color getters for easy access
-  static Color getHeartRateColor(int bpm) {
-    if (bpm == 0) return mutedGrey;
-    if (bpm < 60) return neonCyan;
-    if (bpm < 100) return neonGreen;
-    if (bpm < 130) return Colors.orange.shade400;
-    return electricRed;
-  }
-
+  // ===== Helper: màu theo SpO2 =====
   static Color getSpO2Color(int spo2) {
     if (spo2 == 0) return mutedGrey;
-    if (spo2 >= 95) return neonGreen;
-    if (spo2 >= 90) return neonCyan;
-    if (spo2 >= 85) return Colors.orange.shade400;
-    return electricRed;
+    if (spo2 >= 95) return accentTeal;
+    if (spo2 >= 90) return accentOrange;
+    return accentRed;
   }
+
+  // ===== ThemeData toàn app =====
+  static ThemeData get darkTheme => ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: black,
+        colorScheme: const ColorScheme.dark(
+          primary: accentRed,
+          secondary: accentPurple,
+          surface: cardDark,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: black,
+          elevation: 0,
+          centerTitle: false,
+          titleTextStyle: TextStyle(
+            color: softWhite,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+          iconTheme: IconThemeData(color: softWhite),
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: Color(0xFF1C1C1E),
+          selectedItemColor: accentRed,
+          unselectedItemColor: mutedGrey,
+          showSelectedLabels: true,
+          showUnselectedLabels: true,
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+        ),
+        cardTheme: CardThemeData(
+          color: cardDark,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(color: softWhite),
+          bodySmall: TextStyle(color: mutedGrey),
+        ),
+      );
 }
