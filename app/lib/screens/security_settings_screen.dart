@@ -59,8 +59,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           _toggle(
-            'Chia sẻ dữ liệu',
-            'Cho phép chia sẻ hồ sơ qua QR',
+            'Chia sẻ với người thân',
+            'Cho phép người thân quét QR để xem dữ liệu sức khỏe',
             _dataSharing,
             (v) => setState(() => _dataSharing = v),
           ),
@@ -79,8 +79,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Text(
-              'Dữ liệu sức khỏe được mã hóa khi truyền tải. '
-              'Bạn có thể tắt chia sẻ QR bất kỳ lúc nào.',
+              'Người thân cần tài khoản riêng và quét mã QR trong app. '
+              'Bạn có thể thu hồi quyền xem bất kỳ lúc nào.',
               style: TextStyle(color: AppTheme.mutedGrey, fontSize: 12, height: 1.5),
             ),
           ),
