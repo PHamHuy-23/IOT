@@ -65,6 +65,4 @@ class UserProfileService {
     );
   }
 
-  String buildShareUrl(String token) =>
-      'https://health.iot.app/share/$token';
 }

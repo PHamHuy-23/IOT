@@ -4,9 +4,13 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_data_provider.dart';
 import '../themes/app_theme.dart';
+import 'family_sharing_tab.dart';
 import 'health_history_screen.dart';
 import 'notification_settings_screen.dart';
+import 'scan_family_qr_screen.dart';
 import 'security_settings_screen.dart';
+import 'shared_health_screen.dart';
+import '../providers/family_share_provider.dart';
 
 // ══════════════════════════════════════════════════════════════
 // PROFILE SCREEN
@@ -180,6 +184,52 @@ class ProfileScreen extends StatelessWidget {
                   ]),
 
                   const SizedBox(height: 16),
+                  const _SectionLabel('Gia đình'),
+                  const SizedBox(height: 8),
+                  Consumer<FamilyShareProvider>(
+                    builder: (context, family, _) {
+                      return _MenuGroup(items: [
+                        _MenuItem(
+                          icon: Icons.qr_code_scanner_rounded,
+                          iconBg: const Color(0xFF0A1020),
+                          iconColor: AppTheme.accentBlue,
+                          label: 'Quét mã người thân',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ScanFamilyQrScreen(),
+                            ),
+                          ),
+                        ),
+                        if (family.sharedWithMe.isNotEmpty)
+                          _MenuItem(
+                            icon: Icons.family_restroom_rounded,
+                            iconBg: const Color(0xFF1A1020),
+                            iconColor: AppTheme.accentPurple,
+                            label:
+                                'Đang theo dõi (${family.sharedWithMe.length})',
+                            onTap: () => _openFamilyList(context, family),
+                          ),
+                        _MenuItem(
+                          icon: Icons.share_rounded,
+                          iconBg: const Color(0xFF1A0A10),
+                          iconColor: AppTheme.accentRed,
+                          label: 'Mời người thân (QR)',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const Scaffold(
+                                backgroundColor: AppTheme.black,
+                                body: FamilySharingTab(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ]);
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
                   const _SectionLabel('Dữ liệu sức khỏe'),
                   const SizedBox(height: 8),
                   _MenuGroup(items: [
@@ -289,6 +339,53 @@ class ProfileScreen extends StatelessWidget {
                 style: TextStyle(color: Colors.redAccent)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openFamilyList(BuildContext context, FamilyShareProvider family) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.cardDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Người thân đang theo dõi',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold),
+              ),
+            ),
+            ...family.sharedWithMe.map(
+              (c) => ListTile(
+                title: Text(c.displayName,
+                    style: const TextStyle(color: Colors.white)),
+                subtitle: Text('@${c.username}',
+                    style: const TextStyle(color: AppTheme.mutedGrey)),
+                trailing: const Icon(Icons.chevron_right_rounded,
+                    color: AppTheme.mutedGrey),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SharedHealthScreen(owner: c),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

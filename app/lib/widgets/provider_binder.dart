@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/family_share_provider.dart';
 import '../providers/health_provider.dart';
 import '../providers/user_data_provider.dart';
 
@@ -26,6 +27,7 @@ class _ProviderBinderState extends State<ProviderBinder> {
     final auth = context.read<AuthProvider>();
     final health = context.read<HealthProvider>();
     final userData = context.read<UserDataProvider>();
+    final family = context.read<FamilyShareProvider>();
     _auth = auth;
 
     health.setUserIdProvider(() => auth.currentUser?.id);
@@ -34,14 +36,18 @@ class _ProviderBinderState extends State<ProviderBinder> {
       auth.getStats();
     });
 
-    userData.bindUser(auth.currentUser?.id);
+    final userId = auth.currentUser?.id;
+    userData.bindUser(userId);
+    family.bindUser(userId);
     auth.addListener(_onAuthChanged);
   }
 
   void _onAuthChanged() {
     if (!mounted) return;
     final auth = context.read<AuthProvider>();
-    context.read<UserDataProvider>().bindUser(auth.currentUser?.id);
+    final userId = auth.currentUser?.id;
+    context.read<UserDataProvider>().bindUser(userId);
+    context.read<FamilyShareProvider>().bindUser(userId);
   }
 
   @override

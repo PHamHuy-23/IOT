@@ -55,6 +55,8 @@
 	<string>Ứng dụng cần truy cập vị trí để quét thiết bị Bluetooth</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Ứng dụng cần truy cập vị trí để quét thiết bị Bluetooth</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Ứng dụng cần camera để quét mã QR chia sẻ với người thân</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

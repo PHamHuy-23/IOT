@@ -101,11 +101,6 @@ class UserDataProvider extends ChangeNotifier {
     return _shareToken;
   }
 
-  String? get shareUrl {
-    if (_shareToken == null) return null;
-    return _profile.buildShareUrl(_shareToken!.token);
-  }
-
   Future<String?> exportData() async {
     if (_userId == null) return null;
     return _health.exportUserDataJson(_userId!);

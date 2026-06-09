@@ -18,6 +18,7 @@
     <!-- Vị trí: nhiều hãng Android vẫn yêu cầu bật GPS để quét BLE -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <application
         android:label="app"

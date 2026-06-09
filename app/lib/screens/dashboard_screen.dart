@@ -1,7 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import '../providers/auth_provider.dart';
 import '../providers/health_provider.dart';
 import '../providers/user_data_provider.dart';
@@ -9,6 +8,7 @@ import '../themes/app_theme.dart';
 import '../utils/metric_data_builder.dart';
 import 'activity_rings.dart';
 import 'auth_screen.dart';
+import 'family_sharing_tab.dart';
 import 'medical_profile_sheet.dart';
 import 'metric_detail_screen.dart';
 import 'profile_screen.dart';
@@ -25,7 +25,6 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   DashTab _tab = DashTab.summary;
-  bool _loadingQr = false;
 
   @override
   void initState() {
@@ -83,12 +82,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildBottomNav() {
     return BottomNavigationBar(
       currentIndex: _tab.index,
-      onTap: (i) {
-        setState(() => _tab = DashTab.values[i]);
-        if (DashTab.values[i] == DashTab.sharing && _userId != null) {
-          context.read<UserDataProvider>().loadShareToken();
-        }
-      },
+      onTap: (i) => setState(() => _tab = DashTab.values[i]),
       backgroundColor: AppTheme.cardDark,
       selectedItemColor: AppTheme.accentRed,
       unselectedItemColor: AppTheme.mutedGrey,
@@ -107,7 +101,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.share_rounded),
-          label: 'Chia sẻ',
+          label: 'Gia đình',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.medical_information_rounded),
@@ -125,7 +119,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case DashTab.browse:
         return _buildBrowseTab(provider);
       case DashTab.sharing:
-        return _buildSharingTab();
+        return const FamilySharingTab();
       case DashTab.medicalId:
         return _buildMedicalIdTab();
     }
@@ -455,153 +449,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             style: const TextStyle(color: AppTheme.mutedGrey, fontSize: 11)),
         trailing: const Icon(Icons.chevron_right_rounded,
             color: AppTheme.mutedGrey, size: 20),
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════════════════════════
-  // TAB 3: CHIA SẺ
-  // ══════════════════════════════════════════════════════════
-  Widget _buildSharingTab() {
-    final auth = context.watch<AuthProvider>();
-    final userData = context.watch<UserDataProvider>();
-    final settings = userData.settings;
-    final shareUrl = userData.shareUrl;
-
-    if (!auth.isLoggedIn) {
-      return _buildLoginPrompt('Đăng nhập để tạo mã QR chia sẻ');
-    }
-
-    if (settings != null && !settings.dataSharing) {
-      return _buildLoginPrompt(
-        'Bật "Chia sẻ dữ liệu" trong Bảo mật & Quyền riêng tư để dùng QR',
-      );
-    }
-
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        SliverAppBar(
-          backgroundColor: AppTheme.black,
-          pinned: true,
-          elevation: 0,
-          title: const Text(
-            'Chia sẻ',
-            style: TextStyle(
-                color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-              onPressed: _loadingQr
-                  ? null
-                  : () async {
-                      setState(() => _loadingQr = true);
-                      await userData.loadShareToken();
-                      if (mounted) setState(() => _loadingQr = false);
-                    },
-            ),
-          ],
-        ),
-        SliverFillRemaining(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardDark,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Column(
-                    children: [
-                      if (_loadingQr || shareUrl == null)
-                        const SizedBox(
-                          height: 180,
-                          child: Center(
-                            child: CircularProgressIndicator(
-                                color: AppTheme.accentRed),
-                          ),
-                        )
-                      else
-                        QrImageView(
-                          data: shareUrl,
-                          version: QrVersions.auto,
-                          size: 180,
-                          backgroundColor: Colors.white,
-                        ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Mã QR Khám Chữa Bệnh',
-                        style: TextStyle(
-                            color: AppTheme.accentRed,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        shareUrl ?? 'Đang tạo mã...',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: Colors.grey[400], fontSize: 11, height: 1.5),
-                      ),
-                      const SizedBox(height: 12),
-                      if (userData.shareToken?.expiresAt != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppTheme.neonGreen.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            'Hết hạn: ${_formatExpiry(userData.shareToken!.expiresAt!)}',
-                            style: const TextStyle(
-                                color: AppTheme.neonGreen,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.2),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _formatExpiry(DateTime dt) {
-    return '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
-  }
-
-  Widget _buildLoginPrompt(String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.lock_outline, color: AppTheme.mutedGrey, size: 48),
-            const SizedBox(height: 16),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppTheme.mutedGrey, fontSize: 14)),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => _openProfileOrAuth(context.read<AuthProvider>()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accentRed,
-              ),
-              child: const Text('Đăng nhập / Cài đặt'),
-            ),
-          ],
-        ),
       ),
     );
   }
