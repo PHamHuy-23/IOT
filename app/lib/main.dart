@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/auth_provider.dart';
 import 'providers/health_provider.dart';
+import 'providers/alert_provider.dart';
 import 'providers/family_share_provider.dart';
 import 'providers/user_data_provider.dart';
 import 'screens/dashboard_screen.dart';
@@ -31,6 +32,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => HealthProvider()),
         ChangeNotifierProvider(create: (_) => UserDataProvider()),
         ChangeNotifierProvider(create: (_) => FamilyShareProvider()),
+        ChangeNotifierProvider(create: (_) => AlertProvider()),
       ],
       child: ProviderBinder(
         child: MaterialApp(

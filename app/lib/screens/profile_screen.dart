@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-<<<<<<< HEAD
-import 'profile_features_screens.dart';
-=======
 import '../providers/user_data_provider.dart';
->>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
 import '../themes/app_theme.dart';
+import 'admin_test_panel_screen.dart';
+import 'health_alerts_screen.dart';
 import 'family_sharing_tab.dart';
 import 'health_history_screen.dart';
 import 'notification_settings_screen.dart';
@@ -115,6 +113,8 @@ class ProfileScreen extends StatelessWidget {
                   // ── Role badge ──
                   if (user.isAdmin)
                     _RoleBadge(color: user.avatarColor)
+                  else if (user.isTestAccount)
+                    _TestBadge(color: user.avatarColor)
                   else
                     _UserBadge(color: user.avatarColor),
 
@@ -166,43 +166,50 @@ class ProfileScreen extends StatelessWidget {
                       iconBg: const Color(0xFF0A1020),
                       iconColor: AppTheme.accentBlue,
                       label: 'Thông báo',
-<<<<<<< HEAD
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const NotificationSettingScreen()),
-                        );
-                      },
-=======
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => const NotificationSettingsScreen(),
                         ),
                       ),
->>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
+                    ),
+                    _MenuItem(
+                      icon: Icons.warning_amber_rounded,
+                      iconBg: const Color(0xFF1A0800),
+                      iconColor: AppTheme.accentOrange,
+                      label: 'Cảnh báo sức khỏe',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const HealthAlertsScreen(),
+                        ),
+                      ),
                     ),
                     _MenuItem(
                       icon: Icons.lock_outline_rounded,
                       iconBg: const Color(0xFF1A1020),
                       iconColor: AppTheme.accentPurple,
                       label: 'Bảo mật & Quyền riêng tư',
-<<<<<<< HEAD
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const SecurityPrivacyScreen()),
-                        );
-                      },
-=======
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => const SecuritySettingsScreen(),
                         ),
                       ),
->>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
                     ),
+                    if (user.usesSimulation)
+                      _MenuItem(
+                        icon: Icons.science_rounded,
+                        iconBg: const Color(0xFF1A1020),
+                        iconColor: AppTheme.accentPurple,
+                        label: 'Panel kiểm thử (Admin)',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AdminTestPanelScreen(),
+                          ),
+                        ),
+                      ),
                   ]),
 
                   const SizedBox(height: 16),
@@ -260,37 +267,19 @@ class ProfileScreen extends StatelessWidget {
                       iconBg: const Color(0xFF0A1A10),
                       iconColor: AppTheme.accentGreen,
                       label: 'Lịch sử & Báo cáo',
-<<<<<<< HEAD
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const HistoryReportsScreen()),
-                        );
-                      },
-=======
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => const HealthHistoryScreen(),
                         ),
                       ),
->>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
                     ),
                     _MenuItem(
                       icon: Icons.cloud_upload_outlined,
                       iconBg: const Color(0xFF0A1020),
                       iconColor: AppTheme.accentBlue,
                       label: 'Xuất dữ liệu',
-<<<<<<< HEAD
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const ExportDataScreen()),
-                        );
-                      },
-=======
                       onTap: () => _exportData(context),
->>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
                     ),
                     _MenuItem(
                       icon: Icons.delete_outline_rounded,
@@ -754,6 +743,36 @@ class _RoleBadge extends StatelessWidget {
                 color: grad.$2,
                 fontSize: 12,
                 fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TestBadge extends StatelessWidget {
+  final String color;
+  const _TestBadge({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final grad = _avatarGradient(color);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: grad.$1.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: grad.$1.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.science_rounded, color: grad.$1, size: 14),
+          const SizedBox(width: 5),
+          Text(
+            'Tài khoản Testing',
+            style: TextStyle(
+                color: grad.$1, fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ],
       ),

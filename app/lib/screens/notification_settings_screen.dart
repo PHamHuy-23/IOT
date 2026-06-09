@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/alert_provider.dart';
 import '../providers/user_data_provider.dart';
 import '../themes/app_theme.dart';
 
@@ -35,6 +36,7 @@ class _NotificationSettingsScreenState
       pushEnabled: _pushEnabled,
       healthAlerts: _healthAlerts,
     ));
+    context.read<AlertProvider>().updateHealthAlertsEnabled(_healthAlerts);
     if (mounted) {
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(

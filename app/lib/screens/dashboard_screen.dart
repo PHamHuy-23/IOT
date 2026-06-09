@@ -171,6 +171,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
 
+          if (provider.fallDetected)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: _buildFallBanner(provider),
+              ),
+            ),
+
+          if (provider.usingSimulatedData)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentPurple.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'Chế độ mô phỏng (Admin/Testing)',
+                    style: TextStyle(color: AppTheme.accentPurple, fontSize: 11),
+                  ),
+                ),
+              ),
+            ),
+
           // Banner lỗi (nếu có)
           if (provider.errorMessage.isNotEmpty)
             SliverToBoxAdapter(
@@ -270,13 +296,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 GestureDetector(
-<<<<<<< HEAD
-                  onTap: () => _openDetail(mockCalories(provider.isConnected)), 
-                  child: _BentoCard(
-=======
                   onTap: () => _openUnavailable('Năng lượng'),
                   child: const _BentoCard(
->>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
                     title: 'Năng lượng',
                     value: '--',
                     unit: 'kcal',
@@ -745,6 +766,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 0,
         ),
+      ),
+    );
+  }
+
+  Widget _buildFallBanner(HealthProvider provider) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.accentRed.withOpacity(0.15),
+        border: Border.all(color: AppTheme.accentRed),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: AppTheme.accentRed, size: 22),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'CẢNH BÁO TÉ NGÃ! Đã thông báo người thân.',
+              style: TextStyle(
+                  color: AppTheme.accentRed,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: provider.clearFallState,
+            child: const Text('OK', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

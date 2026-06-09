@@ -18,6 +18,7 @@ class BleService {
   BluetoothCharacteristic? _heartRateChar;
   BluetoothCharacteristic? _spo2Char;
   BluetoothCharacteristic? _timeSyncChar;
+  BluetoothCharacteristic? _fallChar;
 
   bool isConnected() => _connectedDevice != null;
 
@@ -223,6 +224,7 @@ class BleService {
         _heartRateChar = null;
         _spo2Char = null;
         _timeSyncChar = null;
+        _fallChar = null;
         print("✓ Disconnected");
       }
     } catch (e) {
@@ -279,6 +281,11 @@ class BleService {
         TIME_SYNC_CHARACTERISTIC_UUID,
       );
 
+      _fallChar = getCharacteristic(
+        FALL_DETECTION_SERVICE_UUID,
+        FALL_EVENT_CHARACTERISTIC_UUID,
+      );
+
       print("✓ Characteristics setup complete");
     } catch (e) {
       print("✗ Characteristic setup error: $e");
@@ -332,6 +339,18 @@ class BleService {
       return _heartRateChar!.lastValueStream;
     } catch (e) {
       print("✗ Heart rate subscription error: $e");
+      return null;
+    }
+  }
+
+  Future<Stream<List<int>>?> subscribeToFallDetection() async {
+    if (_fallChar == null) return null;
+    try {
+      print("📡 Subscribing to fall detection...");
+      await _fallChar!.setNotifyValue(true);
+      return _fallChar!.lastValueStream;
+    } catch (e) {
+      print("✗ Fall detection subscription error: $e");
       return null;
     }
   }
@@ -398,6 +417,16 @@ class BleService {
     if (data.isEmpty) return 0;
     int spo2 = data[0];
     return spo2.clamp(0, MAX_SPO2);
+  }
+
+  bool parseFallEvent(List<int> data) {
+    if (data.isEmpty) return false;
+    return data[0] == FALL_EVENT_DETECTED;
+  }
+
+  int parseFallConfidence(List<int> data) {
+    if (data.length < 2) return 100;
+    return data[1].clamp(0, 100);
   }
 
   Future<void> syncTime(DateTime time) async {
