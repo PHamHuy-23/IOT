@@ -3,18 +3,21 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/auth_provider.dart';
 import 'providers/health_provider.dart';
+import 'providers/alert_provider.dart';
 import 'providers/family_share_provider.dart';
 import 'providers/user_data_provider.dart';
 import 'screens/dashboard_screen.dart';
 import 'themes/app_theme.dart';
 import 'widgets/provider_binder.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  await dotenv.load(fileName: ".env");
+  
   await Supabase.initialize(
-    url: 'https://ilpgcwhhtozmyfqlgetj.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlscGdjd2hodG96bXlmcWxnZXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4NjEzNTcsImV4cCI6MjA5NjQzNzM1N30.CbXpSZVm1GeOLom0iPbNVh4SPtlPAqDhe2aZKhgUt9E',
+    url: dotenv.env['url']!,
+    anonKey: dotenv.env['anonKey']!,
   );
 
   runApp(const MyApp());
@@ -31,6 +34,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => HealthProvider()),
         ChangeNotifierProvider(create: (_) => UserDataProvider()),
         ChangeNotifierProvider(create: (_) => FamilyShareProvider()),
+        ChangeNotifierProvider(create: (_) => AlertProvider()),
       ],
       child: ProviderBinder(
         child: MaterialApp(

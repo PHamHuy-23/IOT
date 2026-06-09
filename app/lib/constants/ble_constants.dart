@@ -19,6 +19,12 @@ const String SPO2_MEASUREMENT_UUID = "00002A5F-0000-1000-8000-00805f9b34fb";
 // ============ Time Synchronization Service ============
 const String TIME_SYNC_SERVICE_UUID = "9f0f0001-7b35-4f20-8a61-5d3b8a7a0001";
 const String TIME_SYNC_CHARACTERISTIC_UUID = "9f0f0002-7b35-4f20-8a61-5d3b8a7a0001";
+
+// ============ Fall Detection Service (tương lai trên watch.ino) ============
+const String FALL_DETECTION_SERVICE_UUID = "9f0f0003-7b35-4f20-8a61-5d3b8a7a0001";
+const String FALL_EVENT_CHARACTERISTIC_UUID = "9f0f0004-7b35-4f20-8a61-5d3b8a7a0001";
+// Notify | Payload: byte[0]=0x01 fall, byte[1]=confidence 0-100
+const int FALL_EVENT_DETECTED = 0x01;
 // Property: Write + Write Without Response | Payload: 3 bytes
 // Format: byte[0] = hour (0-23), byte[1] = minute (0-59), byte[2] = second (0-59)
 

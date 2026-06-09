@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_data_provider.dart';
 import '../themes/app_theme.dart';
+import 'admin_test_panel_screen.dart';
+import 'health_alerts_screen.dart';
 import 'family_sharing_tab.dart';
 import 'health_history_screen.dart';
 import 'notification_settings_screen.dart';
@@ -111,6 +113,8 @@ class ProfileScreen extends StatelessWidget {
                   // ── Role badge ──
                   if (user.isAdmin)
                     _RoleBadge(color: user.avatarColor)
+                  else if (user.isTestAccount)
+                    _TestBadge(color: user.avatarColor)
                   else
                     _UserBadge(color: user.avatarColor),
 
@@ -170,6 +174,18 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ),
                     _MenuItem(
+                      icon: Icons.warning_amber_rounded,
+                      iconBg: const Color(0xFF1A0800),
+                      iconColor: AppTheme.accentOrange,
+                      label: 'Cảnh báo sức khỏe',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const HealthAlertsScreen(),
+                        ),
+                      ),
+                    ),
+                    _MenuItem(
                       icon: Icons.lock_outline_rounded,
                       iconBg: const Color(0xFF1A1020),
                       iconColor: AppTheme.accentPurple,
@@ -181,6 +197,19 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (user.usesSimulation)
+                      _MenuItem(
+                        icon: Icons.science_rounded,
+                        iconBg: const Color(0xFF1A1020),
+                        iconColor: AppTheme.accentPurple,
+                        label: 'Panel kiểm thử (Admin)',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AdminTestPanelScreen(),
+                          ),
+                        ),
+                      ),
                   ]),
 
                   const SizedBox(height: 16),
@@ -714,6 +743,36 @@ class _RoleBadge extends StatelessWidget {
                 color: grad.$2,
                 fontSize: 12,
                 fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TestBadge extends StatelessWidget {
+  final String color;
+  const _TestBadge({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final grad = _avatarGradient(color);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: grad.$1.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: grad.$1.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.science_rounded, color: grad.$1, size: 14),
+          const SizedBox(width: 5),
+          Text(
+            'Tài khoản Testing',
+            style: TextStyle(
+                color: grad.$1, fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ],
       ),

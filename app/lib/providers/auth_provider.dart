@@ -11,6 +11,7 @@ class AppUser {
   final String username;
   final String displayName;
   final bool isAdmin;
+  final bool isTestAccount;
   final String avatarColor;
 
   const AppUser({
@@ -19,8 +20,12 @@ class AppUser {
     required this.username,
     required this.displayName,
     required this.isAdmin,
+    this.isTestAccount = false,
     required this.avatarColor,
   });
+
+  /// Admin hoặc testing → dùng dữ liệu mô phỏng khi không có BLE
+  bool get usesSimulation => isAdmin || isTestAccount;
 
   /// 2 chữ cái đầu của displayName — dùng cho avatar
   String get initials {
@@ -38,6 +43,7 @@ class AppUser {
       username: map['username'] as String,
       displayName: (map['display_name'] as String?) ?? (map['username'] as String),
       isAdmin: (map['is_admin'] as bool?) ?? false,
+      isTestAccount: (map['is_test_account'] as bool?) ?? false,
       avatarColor: (map['avatar_color'] as String?) ?? 'red',
     );
   }
@@ -45,6 +51,7 @@ class AppUser {
   AppUser copyWith({
     String? displayName,
     String? avatarColor,
+    bool? isTestAccount,
   }) {
     return AppUser(
       id: id,
@@ -52,6 +59,7 @@ class AppUser {
       username: username,
       displayName: displayName ?? this.displayName,
       isAdmin: isAdmin,
+      isTestAccount: isTestAccount ?? this.isTestAccount,
       avatarColor: avatarColor ?? this.avatarColor,
     );
   }
@@ -145,6 +153,7 @@ class AuthProvider extends ChangeNotifier {
       final userData = result is List ? result.first : result;
       _currentUser = AppUser.fromMap(userData as Map<String, dynamic>);
       await _persistUserId(_currentUser!.id);
+      await _enrichUserProfile(_currentUser!.id);
       await getStats();
       notifyListeners();
       return true;
@@ -215,6 +224,7 @@ class AuthProvider extends ChangeNotifier {
       final userData = result is List ? result.first : result;
       _currentUser = AppUser.fromMap(userData as Map<String, dynamic>);
       await _persistUserId(_currentUser!.id);
+      await _enrichUserProfile(_currentUser!.id);
       await getStats();
       notifyListeners();
       return true;
@@ -304,6 +314,29 @@ class AuthProvider extends ChangeNotifier {
   // PRIVATE HELPERS
   // ══════════════════════════════════════════════════════════
 
+  Future<void> _enrichUserProfile(String userId) async {
+    try {
+      final data = await _supabase
+          .from('users')
+          .select('is_admin, is_test_account, display_name, avatar_color')
+          .eq('id', userId)
+          .single();
+      if (_currentUser == null) return;
+      final u = _currentUser!;
+      _currentUser = AppUser(
+        id: u.id,
+        email: u.email,
+        username: u.username,
+        displayName: (data['display_name'] as String?) ?? u.displayName,
+        isAdmin: (data['is_admin'] as bool?) ?? u.isAdmin,
+        isTestAccount: (data['is_test_account'] as bool?) ?? false,
+        avatarColor: (data['avatar_color'] as String?) ?? u.avatarColor,
+      );
+    } catch (e) {
+      debugPrint('[AuthProvider._enrichUserProfile] $e');
+    }
+  }
+
   Future<void> _persistUserId(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_savedUserIdKey, userId);
@@ -313,7 +346,8 @@ class AuthProvider extends ChangeNotifier {
     try {
       final data = await _supabase
           .from('users')
-          .select('id, email, username, display_name, is_admin, avatar_color')
+          .select(
+              'id, email, username, display_name, is_admin, is_test_account, avatar_color')
           .eq('id', userId)
           .single();
       _currentUser = AppUser.fromMap(data);
