@@ -492,7 +492,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final user = auth.currentUser;
     final name = user?.displayName ?? 'Khách vãng lai';
     final email = user?.email ?? 'Không có email';
-    final uid = user?.uid ?? 'Không có UID';
+    final uid = user?.id ?? 'Không có UID';
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),

@@ -4,7 +4,7 @@ import '../providers/auth_provider.dart';
 import '../themes/app_theme.dart';
 
 // ══════════════════════════════════════════════════════════════
-// PROFILE SCREEN — hiện ra khi tap avatar (đã đăng nhập)
+// PROFILE SCREEN
 // ══════════════════════════════════════════════════════════════
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -18,7 +18,7 @@ class ProfileScreen extends StatelessWidget {
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          // ── Sliver App Bar với banner ──
+          // ── Sliver App Bar ──
           SliverAppBar(
             backgroundColor: AppTheme.black,
             expandedHeight: 140,
@@ -34,8 +34,8 @@ class ProfileScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      AppTheme.accentRed.withOpacity(0.3),
-                      AppTheme.accentPurple.withOpacity(0.3),
+                      _avatarGradient(user.avatarColor).$1.withOpacity(0.3),
+                      _avatarGradient(user.avatarColor).$2.withOpacity(0.3),
                       AppTheme.black,
                     ],
                     begin: Alignment.topCenter,
@@ -52,22 +52,22 @@ class ProfileScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Avatar lớn + nút sửa ──
+                  // ── Avatar + nút sửa ──
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      _AvatarCircle(
+                      AvatarCircle(
                         initials: user.initials,
+                        avatarColor: user.avatarColor,
                         size: 72,
                         fontSize: 26,
                       ),
                       const Spacer(),
                       OutlinedButton.icon(
-                        onPressed: () {
-                          // TODO: mở màn hình chỉnh sửa hồ sơ
-                        },
+                        onPressed: () => _openEditProfile(context, user),
                         icon: const Icon(Icons.edit_rounded, size: 14),
-                        label: const Text('Sửa hồ sơ', style: TextStyle(fontSize: 12)),
+                        label: const Text('Sửa hồ sơ',
+                            style: TextStyle(fontSize: 12)),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           side: const BorderSide(
@@ -82,6 +82,8 @@ class ProfileScreen extends StatelessWidget {
                   ),
 
                   const SizedBox(height: 12),
+
+                  // ── Tên + email ──
                   Text(
                     user.displayName,
                     style: const TextStyle(
@@ -91,7 +93,7 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    user.email,
+                    '@${user.username}  •  ${user.email}',
                     style: const TextStyle(
                         color: AppTheme.mutedGrey, fontSize: 13),
                   ),
@@ -99,52 +101,44 @@ class ProfileScreen extends StatelessWidget {
 
                   // ── Role badge ──
                   if (user.isAdmin)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentPurple.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: AppTheme.accentPurple.withOpacity(0.4)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.star_rounded,
-                              color: AppTheme.accentPurple, size: 14),
-                          SizedBox(width: 5),
-                          Text(
-                            'Tài khoản Admin',
-                            style: TextStyle(
-                                color: AppTheme.accentPurple,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _RoleBadge(color: user.avatarColor)
+                  else
+                    _UserBadge(color: user.avatarColor),
 
                   const SizedBox(height: 24),
 
-                  // ── Stats giả lập ──
-                  Row(
-                    children: [
-                      _StatBox(
-                          label: 'Ngày theo dõi', value: '128', icon: Icons.calendar_today_rounded),
-                      const SizedBox(width: 10),
-                      _StatBox(
-                          label: 'Đồng bộ', value: '47', icon: Icons.sync_rounded),
-                      const SizedBox(width: 10),
-                      _StatBox(
-                          label: 'Huy hiệu', value: '9', icon: Icons.emoji_events_rounded),
-                    ],
+                  // ── Stats (Đã cập nhật dùng Consumer) ──
+                  Consumer<AuthProvider>(
+                    builder: (context, auth, _) {
+                      final stats = auth.stats;
+                      return Row(
+                        children: [
+                          _StatBox(
+                            label: 'Ngày theo dõi',
+                            value: stats.daysTracked.toString(),
+                            icon: Icons.calendar_today_rounded,
+                          ),
+                          const SizedBox(width: 10),
+                          _StatBox(
+                            label: 'Đồng bộ',
+                            value: stats.totalSyncs.toString(),
+                            icon: Icons.sync_rounded,
+                          ),
+                          const SizedBox(width: 10),
+                          _StatBox(
+                            label: 'Huy hiệu',
+                            value: stats.badgeCount.toString(),
+                            icon: Icons.emoji_events_rounded,
+                          ),
+                        ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 24),
 
                   // ── Menu cài đặt ──
-                  _SectionLabel('Cài đặt tài khoản'),
+                  const _SectionLabel('Cài đặt tài khoản'),
                   const SizedBox(height: 8),
                   _MenuGroup(items: [
                     _MenuItem(
@@ -152,7 +146,7 @@ class ProfileScreen extends StatelessWidget {
                       iconBg: const Color(0xFF1A0A10),
                       iconColor: AppTheme.accentRed,
                       label: 'Thông tin cá nhân',
-                      onTap: () {},
+                      onTap: () => _openEditProfile(context, user),
                     ),
                     _MenuItem(
                       icon: Icons.notifications_none_rounded,
@@ -171,7 +165,7 @@ class ProfileScreen extends StatelessWidget {
                   ]),
 
                   const SizedBox(height: 16),
-                  _SectionLabel('Dữ liệu sức khỏe'),
+                  const _SectionLabel('Dữ liệu sức khỏe'),
                   const SizedBox(height: 8),
                   _MenuGroup(items: [
                     _MenuItem(
@@ -193,7 +187,7 @@ class ProfileScreen extends StatelessWidget {
                       iconBg: const Color(0xFF1A0800),
                       iconColor: AppTheme.accentOrange,
                       label: 'Xóa dữ liệu',
-                      onTap: () {},
+                      onTap: () => _confirmDeleteData(context),
                     ),
                   ]),
 
@@ -208,7 +202,8 @@ class ProfileScreen extends StatelessWidget {
                           color: Colors.redAccent, size: 18),
                       label: const Text(
                         'Đăng xuất',
-                        style: TextStyle(color: Colors.redAccent, fontSize: 15),
+                        style:
+                            TextStyle(color: Colors.redAccent, fontSize: 15),
                       ),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(
@@ -230,6 +225,20 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  // ── Mở sheet chỉnh sửa hồ sơ ────────────────────────────
+  void _openEditProfile(BuildContext context, AppUser user) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.cardDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _EditProfileSheet(user: user),
+    );
+  }
+
+  // ── Xác nhận đăng xuất ──────────────────────────────────
   void _confirmSignOut(BuildContext context) {
     showDialog(
       context: context,
@@ -253,8 +262,8 @@ class ProfileScreen extends StatelessWidget {
             onPressed: () {
               context.read<AuthProvider>().signOut();
               Navigator.of(context)
-                ..pop() // dialog
-                ..pop(); // profile screen
+                ..pop()
+                ..pop();
             },
             child: const Text('Đăng xuất',
                 style: TextStyle(color: Colors.redAccent)),
@@ -263,29 +272,256 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
+
+  // ── Xác nhận xoá dữ liệu ────────────────────────────────
+  void _confirmDeleteData(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.cardDark,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Xóa toàn bộ dữ liệu?',
+            style: TextStyle(color: Colors.white, fontSize: 18)),
+        content: const Text(
+          'Hành động này không thể hoàn tác. Tất cả lịch sử sức khỏe sẽ bị xóa vĩnh viễn.',
+          style: TextStyle(color: AppTheme.mutedGrey, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy',
+                style: TextStyle(color: AppTheme.mutedGrey)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: gọi API xoá dữ liệu
+            },
+            child: const Text('Xóa',
+                style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-// ── Avatar Widget dùng chung ──────────────────────────────────
-class _AvatarCircle extends StatelessWidget {
+// ══════════════════════════════════════════════════════════════
+// EDIT PROFILE BOTTOM SHEET
+// ══════════════════════════════════════════════════════════════
+class _EditProfileSheet extends StatefulWidget {
+  final AppUser user;
+  const _EditProfileSheet({required this.user});
+
+  @override
+  State<_EditProfileSheet> createState() => _EditProfileSheetState();
+}
+
+class _EditProfileSheetState extends State<_EditProfileSheet> {
+  late final TextEditingController _nameCtrl;
+  late String _selectedColor;
+  bool _saving = false;
+
+  static const _colors = ['red', 'purple', 'teal', 'blue', 'amber'];
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.user.displayName);
+    _selectedColor = widget.user.avatarColor;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_nameCtrl.text.trim().isEmpty) return;
+    setState(() => _saving = true);
+
+    final success = await context.read<AuthProvider>().updateProfile(
+          displayName: _nameCtrl.text.trim(),
+          avatarColor: _selectedColor,
+        );
+
+    if (mounted) {
+      setState(() => _saving = false);
+      if (success) Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.subtleGrey,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          const Text(
+            'Chỉnh sửa hồ sơ',
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+
+          // Preview avatar
+          Center(
+            child: AvatarCircle(
+              initials: widget.user.initials,
+              avatarColor: _selectedColor,
+              size: 64,
+              fontSize: 22,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Chọn màu avatar
+          const Text('Màu avatar',
+              style: TextStyle(color: AppTheme.mutedGrey, fontSize: 12)),
+          const SizedBox(height: 8),
+          Row(
+            children: _colors.map((color) {
+              final selected = color == _selectedColor;
+              final grad = _avatarGradient(color);
+              return GestureDetector(
+                onTap: () => setState(() => _selectedColor = color),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [grad.$1, grad.$2],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    border: Border.all(
+                      color: selected ? Colors.white : Colors.transparent,
+                      width: 2.5,
+                    ),
+                  ),
+                  child: selected
+                      ? const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 16)
+                      : null,
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+
+          // Tên hiển thị
+          const Text('Tên hiển thị',
+              style: TextStyle(color: AppTheme.mutedGrey, fontSize: 12)),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _nameCtrl,
+            style: const TextStyle(color: Colors.white, fontSize: 15),
+            decoration: InputDecoration(
+              hintText: 'Nhập tên của bạn',
+              hintStyle:
+                  const TextStyle(color: AppTheme.subtleGrey, fontSize: 14),
+              filled: true,
+              fillColor: AppTheme.black,
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    const BorderSide(color: AppTheme.accentRed, width: 1.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Nút lưu
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _saving ? null : _save,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentRed,
+                disabledBackgroundColor:
+                    AppTheme.accentRed.withOpacity(0.5),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: _saving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2.5),
+                    )
+                  : const Text(
+                      'Lưu thay đổi',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// AVATAR CIRCLE — dùng chung trong app
+// ══════════════════════════════════════════════════════════════
+class AvatarCircle extends StatelessWidget {
   final String initials;
+  final String avatarColor;
   final double size;
   final double fontSize;
 
-  const _AvatarCircle({
+  const AvatarCircle({
+    super.key,
     required this.initials,
+    required this.avatarColor,
     this.size = 34,
     this.fontSize = 13,
   });
 
   @override
   Widget build(BuildContext context) {
+    final grad = _avatarGradient(avatarColor);
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          colors: [AppTheme.accentRed, AppTheme.accentPurple],
+        gradient: LinearGradient(
+          colors: [grad.$1, grad.$2],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -306,7 +542,76 @@ class _AvatarCircle extends StatelessWidget {
   }
 }
 
-// ── Stat box nhỏ ──────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// ROLE BADGES
+// ══════════════════════════════════════════════════════════════
+class _RoleBadge extends StatelessWidget {
+  final String color;
+  const _RoleBadge({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final grad = _avatarGradient(color);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: grad.$2.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: grad.$2.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.star_rounded, color: grad.$2, size: 14),
+          const SizedBox(width: 5),
+          Text(
+            'Tài khoản Admin',
+            style: TextStyle(
+                color: grad.$2,
+                fontSize: 12,
+                fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UserBadge extends StatelessWidget {
+  final String color;
+  const _UserBadge({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final grad = _avatarGradient(color);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: grad.$1.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: grad.$1.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.person_rounded, color: grad.$1, size: 14),
+          const SizedBox(width: 5),
+          Text(
+            'Thành viên',
+            style: TextStyle(
+                color: grad.$1,
+                fontSize: 12,
+                fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// SHARED SMALL WIDGETS
+// ══════════════════════════════════════════════════════════════
 class _StatBox extends StatelessWidget {
   final String label;
   final String value;
@@ -319,7 +624,8 @@ class _StatBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+        padding:
+            const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
         decoration: BoxDecoration(
           color: AppTheme.cardDark,
           borderRadius: BorderRadius.circular(14),
@@ -345,7 +651,6 @@ class _StatBox extends StatelessWidget {
   }
 }
 
-// ── Section label ─────────────────────────────────────────────
 class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
@@ -363,7 +668,6 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-// ── Menu group ────────────────────────────────────────────────
 class _MenuGroup extends StatelessWidget {
   final List<_MenuItem> items;
   const _MenuGroup({required this.items});
@@ -417,14 +721,16 @@ class _MenuItem extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         child: Row(
           children: [
             Container(
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                  color: iconBg, borderRadius: BorderRadius.circular(9)),
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(9)),
               child: Icon(icon, color: iconColor, size: 17),
             ),
             const SizedBox(width: 12),
@@ -441,5 +747,24 @@ class _MenuItem extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// HELPER — map avatarColor string → gradient colors
+// ══════════════════════════════════════════════════════════════
+(Color, Color) _avatarGradient(String color) {
+  switch (color) {
+    case 'purple':
+      return (AppTheme.accentPurple, const Color(0xFF7F77DD));
+    case 'teal':
+      return (const Color(0xFF1D9E75), const Color(0xFF0F6E56));
+    case 'blue':
+      return (AppTheme.accentBlue, const Color(0xFF185FA5));
+    case 'amber':
+      return (AppTheme.accentOrange, const Color(0xFFBA7517));
+    case 'red':
+    default:
+      return (AppTheme.accentRed, AppTheme.accentPurple);
   }
 }
