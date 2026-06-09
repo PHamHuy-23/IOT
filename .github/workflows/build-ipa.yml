@@ -8,9 +8,7 @@ on:
 jobs:
   build-ios:
     runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: ./app  # ← đổi "app" thành tên thư mục thật
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,7 +16,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.44.0'  # ← đổi theo version Flutter của bạn
+          flutter-version: '3.44.0'
 
       - name: Create .env file
         run: |
