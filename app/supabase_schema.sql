@@ -215,3 +215,12 @@ ALTER TABLE users ADD COLUMN password_hash TEXT;
 UPDATE users 
 SET password_hash = crypt('123456', gen_salt('bf'))
 WHERE username IN ('vāna', 'lethib', 'tranvanc');
+
+-- 3. Cột profile (đã có trên Supabase production)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin boolean NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color text;
+
+-- 4. Bảng mở rộng — xem chi tiết trong supabase_migration_v2.sql
+--    user_medical_profile, share_tokens, user_settings
+--    + RPC: insert_health_record, delete_user_health_data, get_or_create_share_token

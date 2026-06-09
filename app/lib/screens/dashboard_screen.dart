@@ -1,11 +1,15 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../providers/auth_provider.dart';
 import '../providers/health_provider.dart';
+import '../providers/user_data_provider.dart';
 import '../themes/app_theme.dart';
+import '../utils/metric_data_builder.dart';
 import 'activity_rings.dart';
 import 'auth_screen.dart';
+import 'medical_profile_sheet.dart';
 import 'metric_detail_screen.dart';
 import 'profile_screen.dart';
 
@@ -21,6 +25,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   DashTab _tab = DashTab.summary;
+  bool _loadingQr = false;
 
   @override
   void initState() {
@@ -30,8 +35,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  // Hàm điều hướng đến trang chi tiết dùng chung
-  void _openDetail(MetricData metric) {
+  String? get _userId => context.read<AuthProvider>().currentUser?.id;
+
+  Future<void> _openDetail(Future<MetricData> metricFuture) async {
+    final metric = await metricFuture;
+    if (!mounted) return;
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (_, __, ___) => MetricDetailScreen(metric: metric),
@@ -42,6 +50,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
           child: child,
         ),
+      ),
+    );
+  }
+
+  void _openUnavailable(String title) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$title — chưa có cảm biến, dữ liệu sẽ hiển thị khi có.'),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -66,7 +83,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildBottomNav() {
     return BottomNavigationBar(
       currentIndex: _tab.index,
-      onTap: (i) => setState(() => _tab = DashTab.values[i]),
+      onTap: (i) {
+        setState(() => _tab = DashTab.values[i]);
+        if (DashTab.values[i] == DashTab.sharing && _userId != null) {
+          context.read<UserDataProvider>().loadShareToken();
+        }
+      },
       backgroundColor: AppTheme.cardDark,
       selectedItemColor: AppTheme.accentRed,
       unselectedItemColor: AppTheme.mutedGrey,
@@ -113,8 +135,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // TAB 1: TÓM TẮT
   // ══════════════════════════════════════════════════════════
   Widget _buildSummaryTab(HealthProvider provider) {
+    final summary = context.watch<UserDataProvider>().todaySummary;
+    final syncs = summary?.totalHeartRateRecords ?? 0;
+    final avgHr = summary?.avgHeartRate;
+    final avgSpo2 = summary?.avgSpO2;
+
     return RefreshIndicator(
-      onRefresh: () => provider.autoConnectToWatch(),
+      onRefresh: () async {
+        await provider.autoConnectToWatch();
+        if (_userId != null) {
+          await context.read<UserDataProvider>().refreshTodaySummary();
+        }
+      },
       color: AppTheme.accentRed,
       child: CustomScrollView(
         physics: const BouncingScrollPhysics(),
@@ -170,12 +202,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             sliver: SliverToBoxAdapter(
               child: ActivityRingsWidget(
-                steps: provider.isConnected ? 4320 : 0,
-                stepsTarget: 10000,
-                mindfulMinutes: provider.isConnected ? 10 : 0,
-                mindfulTarget: 15,
-                waterMl: provider.isConnected ? 1200 : 0,
-                waterTarget: 2000,
+                steps: syncs,
+                stepsTarget: 50,
+                mindfulMinutes: avgHr ?? 0,
+                mindfulTarget: 100,
+                waterMl: avgSpo2 ?? 0,
+                waterTarget: 100,
               ),
             ),
           ),
@@ -195,50 +227,68 @@ class _DashboardScreenState extends State<DashboardScreen> {
               delegate: SliverChildListDelegate([
                 // Nhịp tim
                 GestureDetector(
-                  onTap: () => _openDetail(mockHeartRate(provider.heartRate)),
+                  onTap: () => _openDetail(MetricDataBuilder.heartRate(
+                    userId: _userId,
+                    current: provider.heartRate,
+                  )),
                   child: _BentoCard(
                     title: 'Nhịp tim',
-                    value: provider.isConnected ? '${provider.heartRate}' : '--',
+                    value: provider.isConnected
+                        ? '${provider.heartRate}'
+                        : (avgHr?.toString() ?? '--'),
                     unit: 'BPM',
                     icon: Icons.favorite_rounded,
-                    color: AppTheme.getHeartRateColor(provider.heartRate),
-                    subtitle: _hrStatus(provider.heartRate),
+                    color: AppTheme.getHeartRateColor(
+                        provider.isConnected ? provider.heartRate : (avgHr ?? 0)),
+                    subtitle: provider.isConnected
+                        ? _hrStatus(provider.heartRate)
+                        : (avgHr != null ? 'TB hôm nay' : 'Chờ dữ liệu...'),
                   ),
                 ),
-                // SpO2
                 GestureDetector(
-                  onTap: () => _openDetail(mockSpO2(provider.spO2)),
+                  onTap: () => _openDetail(MetricDataBuilder.spO2(
+                    userId: _userId,
+                    current: provider.spO2,
+                  )),
                   child: _BentoCard(
                     title: 'Oxy trong máu',
-                    value: provider.isConnected ? '${provider.spO2}' : '--',
+                    value: provider.isConnected
+                        ? '${provider.spO2}'
+                        : (avgSpo2?.toString() ?? '--'),
                     unit: '%',
                     icon: Icons.bloodtype_rounded,
-                    color: AppTheme.getSpO2Color(provider.spO2),
-                    subtitle: _spo2Status(provider.spO2),
+                    color: AppTheme.getSpO2Color(
+                        provider.isConnected ? provider.spO2 : (avgSpo2 ?? 0)),
+                    subtitle: provider.isConnected
+                        ? _spo2Status(provider.spO2)
+                        : (avgSpo2 != null ? 'TB hôm nay' : 'Chờ dữ liệu...'),
                   ),
                 ),
-                // Bước chân
                 GestureDetector(
-                  onTap: () => _openDetail(mockSteps(provider.isConnected)),
+                  onTap: () => _openUnavailable('Bước chân'),
                   child: _BentoCard(
-                    title: 'Bước chân',
-                    value: provider.isConnected ? '4,320' : '--',
-                    unit: 'bước',
-                    icon: Icons.directions_walk_rounded,
+                    title: 'Đồng bộ hôm nay',
+                    value: _userId != null ? '$syncs' : '--',
+                    unit: 'lần',
+                    icon: Icons.sync_rounded,
                     color: AppTheme.accentGreen,
-                    subtitle: 'Mục tiêu: 8,000',
+                    subtitle: 'Dữ liệu từ đồng hồ BLE',
                   ),
                 ),
-                // Năng lượng (Chưa có mock riêng nên tạm thời dẫn tới trang Bước chân hoặc Calories tùy thiết kế)
                 GestureDetector(
+<<<<<<< HEAD
                   onTap: () => _openDetail(mockCalories(provider.isConnected)), 
                   child: _BentoCard(
+=======
+                  onTap: () => _openUnavailable('Năng lượng'),
+                  child: const _BentoCard(
+>>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
                     title: 'Năng lượng',
-                    value: provider.isConnected ? '185' : '--',
+                    value: '--',
                     unit: 'kcal',
                     icon: Icons.local_fire_department_rounded,
                     color: AppTheme.accentOrange,
-                    subtitle: 'Hoạt động hôm nay',
+                    subtitle: 'Chưa có cảm biến',
                   ),
                 ),
               ]),
@@ -250,13 +300,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             sliver: SliverToBoxAdapter(
               child: GestureDetector(
-                onTap: () => _openDetail(mockSleep(provider.isConnected)),
-                child: _WideBentoCard(
+                onTap: () => _openUnavailable('Giấc ngủ'),
+                child: const _WideBentoCard(
                   title: 'Giấc ngủ',
-                  value: provider.isConnected ? '6h 45m' : '--',
+                  value: '--',
                   icon: Icons.bedtime_rounded,
                   color: AppTheme.accentPurple,
-                  subtitle: 'Ngủ sâu: 2h 15m  •  Đang phân tích',
+                  subtitle: 'Chưa có cảm biến giấc ngủ',
                 ),
               ),
             ),
@@ -317,37 +367,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
         icon: Icons.directions_run_rounded,
         label: 'Hoạt động',
         sub: 'Bước chân, Khoảng cách, Tập thể dục',
-        onTap: () => _openDetail(mockSteps(provider.isConnected)),
+        onTap: () => _openUnavailable('Hoạt động'),
       ),
       _BrowseCategory(
         icon: Icons.favorite_rounded,
         label: 'Tim mạch',
         sub: 'Nhịp tim, Điện tâm đồ',
-        onTap: () => _openDetail(mockHeartRate(provider.heartRate)),
+        onTap: () => _openDetail(MetricDataBuilder.heartRate(
+          userId: _userId,
+          current: provider.heartRate,
+        )),
       ),
       _BrowseCategory(
         icon: Icons.bloodtype_rounded,
         label: 'Oxy trong máu',
         sub: 'Chỉ số SpO2 thời gian thực',
-        onTap: () => _openDetail(mockSpO2(provider.spO2)),
+        onTap: () => _openDetail(MetricDataBuilder.spO2(
+          userId: _userId,
+          current: provider.spO2,
+        )),
       ),
       _BrowseCategory(
         icon: Icons.bedtime_rounded,
         label: 'Giấc ngủ',
         sub: 'Phân tích sâu REM, Ngủ sâu',
-        onTap: () => _openDetail(mockSleep(provider.isConnected)),
+        onTap: () => _openUnavailable('Giấc ngủ'),
       ),
       _BrowseCategory(
         icon: Icons.water_drop_rounded,
         label: 'Dinh dưỡng & Nước',
         sub: 'Hydrat hóa, Lượng calo',
-        onTap: () => _openDetail(mockSteps(provider.isConnected)), // Thay thế bằng hàm mock dinh dưỡng nếu có
+        onTap: () => _openUnavailable('Dinh dưỡng'),
       ),
       _BrowseCategory(
         icon: Icons.self_improvement_rounded,
         label: 'Chánh niệm',
         sub: 'Thiền định, Hơi thở',
-        onTap: () => _openDetail(mockSteps(provider.isConnected)), // Thay thế bằng hàm mock chánh niệm nếu có
+        onTap: () => _openUnavailable('Chánh niệm'),
       ),
     ];
 
@@ -412,6 +468,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // TAB 3: CHIA SẺ
   // ══════════════════════════════════════════════════════════
   Widget _buildSharingTab() {
+    final auth = context.watch<AuthProvider>();
+    final userData = context.watch<UserDataProvider>();
+    final settings = userData.settings;
+    final shareUrl = userData.shareUrl;
+
+    if (!auth.isLoggedIn) {
+      return _buildLoginPrompt('Đăng nhập để tạo mã QR chia sẻ');
+    }
+
+    if (settings != null && !settings.dataSharing) {
+      return _buildLoginPrompt(
+        'Bật "Chia sẻ dữ liệu" trong Bảo mật & Quyền riêng tư để dùng QR',
+      );
+    }
+
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
@@ -424,6 +495,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             style: TextStyle(
                 color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+              onPressed: _loadingQr
+                  ? null
+                  : () async {
+                      setState(() => _loadingQr = true);
+                      await userData.loadShareToken();
+                      if (mounted) setState(() => _loadingQr = false);
+                    },
+            ),
+          ],
         ),
         SliverFillRemaining(
           child: Padding(
@@ -439,8 +522,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   child: Column(
                     children: [
-                      const Icon(Icons.qr_code_2_rounded,
-                          size: 120, color: Colors.white),
+                      if (_loadingQr || shareUrl == null)
+                        const SizedBox(
+                          height: 180,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                                color: AppTheme.accentRed),
+                          ),
+                        )
+                      else
+                        QrImageView(
+                          data: shareUrl,
+                          version: QrVersions.auto,
+                          size: 180,
+                          backgroundColor: Colors.white,
+                        ),
                       const SizedBox(height: 16),
                       const Text(
                         'Mã QR Khám Chữa Bệnh',
@@ -451,28 +547,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Cho bác sĩ quét để xem hồ sơ sức khỏe được mã hoá an toàn.',
+                        shareUrl ?? 'Đang tạo mã...',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                            color: Colors.grey[400], fontSize: 12, height: 1.5),
+                            color: Colors.grey[400], fontSize: 11, height: 1.5),
                       ),
                       const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppTheme.neonGreen.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
+                      if (userData.shareToken?.expiresAt != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.neonGreen.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'Hết hạn: ${_formatExpiry(userData.shareToken!.expiresAt!)}',
+                            style: const TextStyle(
+                                color: AppTheme.neonGreen,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2),
+                          ),
                         ),
-                        child: const Text(
-                          'LIVE SYNC',
-                          style: TextStyle(
-                              color: AppTheme.neonGreen,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -484,15 +581,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  String _formatExpiry(DateTime dt) {
+    return '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildLoginPrompt(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.lock_outline, color: AppTheme.mutedGrey, size: 48),
+            const SizedBox(height: 16),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppTheme.mutedGrey, fontSize: 14)),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => _openProfileOrAuth(context.read<AuthProvider>()),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentRed,
+              ),
+              child: const Text('Đăng nhập / Cài đặt'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ══════════════════════════════════════════════════════════
   // TAB 4: ID Y TẾ
   // ══════════════════════════════════════════════════════════
   Widget _buildMedicalIdTab() {
-    final auth = Provider.of<AuthProvider>(context);
+    final auth = context.watch<AuthProvider>();
+    final userData = context.watch<UserDataProvider>();
     final user = auth.currentUser;
+    final profile = userData.medicalProfile;
     final name = user?.displayName ?? 'Khách vãng lai';
     final email = user?.email ?? 'Không có email';
-    final uid = user?.id ?? 'Không có UID';
+    final uid = user?.id ?? 'Chưa đăng nhập';
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
@@ -506,6 +635,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
             style: TextStyle(
                 color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
           ),
+          actions: [
+            if (auth.isLoggedIn && profile != null)
+              IconButton(
+                icon: const Icon(Icons.edit_rounded, color: Colors.white),
+                onPressed: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: AppTheme.cardDark,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  builder: (_) => MedicalProfileSheet(profile: profile),
+                ),
+              ),
+          ],
         ),
         SliverPadding(
           padding: const EdgeInsets.all(16),
@@ -551,11 +696,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       _medRow('Họ và Tên', name, isFirst: true),
                       _medRow('Email', email),
                       _medRow('UID', uid),
-                      _medRow('Nhóm máu', 'O+  (Rh dương)',
-                          valueColor: AppTheme.accentRed),
-                      _medRow('Chiều cao / Cân nặng', '168 cm  /  54 kg'),
-                      _medRow('Dị ứng', 'Penicillin, Đậu phộng',
-                          valueColor: AppTheme.accentOrange, isLast: true),
+                      _medRow(
+                        'Nhóm máu',
+                        profile?.bloodType ?? 'Chưa cập nhật',
+                        valueColor: AppTheme.accentRed,
+                      ),
+                      _medRow(
+                        'Chiều cao / Cân nặng',
+                        profile?.heightWeightDisplay ?? 'Chưa cập nhật',
+                      ),
+                      _medRow(
+                        'Dị ứng',
+                        profile?.allergies ?? 'Không có / Chưa cập nhật',
+                        valueColor: AppTheme.accentOrange,
+                      ),
+                      _medRow(
+                        'Liên hệ khẩn cấp',
+                        profile?.emergencyContact ?? 'Chưa cập nhật',
+                        isLast: true,
+                      ),
                     ],
                   ),
                 ),

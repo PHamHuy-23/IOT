@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+<<<<<<< HEAD
 import 'profile_features_screens.dart';
+=======
+import '../providers/user_data_provider.dart';
+>>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
 import '../themes/app_theme.dart';
+import 'health_history_screen.dart';
+import 'notification_settings_screen.dart';
+import 'security_settings_screen.dart';
 
 // ══════════════════════════════════════════════════════════════
 // PROFILE SCREEN
@@ -154,24 +162,42 @@ class ProfileScreen extends StatelessWidget {
                       iconBg: const Color(0xFF0A1020),
                       iconColor: AppTheme.accentBlue,
                       label: 'Thông báo',
+<<<<<<< HEAD
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const NotificationSettingScreen()),
                         );
                       },
+=======
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationSettingsScreen(),
+                        ),
+                      ),
+>>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
                     ),
                     _MenuItem(
                       icon: Icons.lock_outline_rounded,
                       iconBg: const Color(0xFF1A1020),
                       iconColor: AppTheme.accentPurple,
                       label: 'Bảo mật & Quyền riêng tư',
+<<<<<<< HEAD
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const SecurityPrivacyScreen()),
                         );
                       },
+=======
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SecuritySettingsScreen(),
+                        ),
+                      ),
+>>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
                     ),
                   ]),
 
@@ -184,24 +210,37 @@ class ProfileScreen extends StatelessWidget {
                       iconBg: const Color(0xFF0A1A10),
                       iconColor: AppTheme.accentGreen,
                       label: 'Lịch sử & Báo cáo',
+<<<<<<< HEAD
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const HistoryReportsScreen()),
                         );
                       },
+=======
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const HealthHistoryScreen(),
+                        ),
+                      ),
+>>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
                     ),
                     _MenuItem(
                       icon: Icons.cloud_upload_outlined,
                       iconBg: const Color(0xFF0A1020),
                       iconColor: AppTheme.accentBlue,
                       label: 'Xuất dữ liệu',
+<<<<<<< HEAD
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const ExportDataScreen()),
                         );
                       },
+=======
+                      onTap: () => _exportData(context),
+>>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
                     ),
                     _MenuItem(
                       icon: Icons.delete_outline_rounded,
@@ -294,6 +333,20 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _exportData(BuildContext context) async {
+    final json = await context.read<UserDataProvider>().exportData();
+    if (json == null || !context.mounted) return;
+    await Clipboard.setData(ClipboardData(text: json));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã sao chép dữ liệu JSON vào clipboard'),
+          backgroundColor: AppTheme.neonGreen,
+        ),
+      );
+    }
+  }
+
   // ── Xác nhận xoá dữ liệu ────────────────────────────────
   void _confirmDeleteData(BuildContext context) {
     showDialog(
@@ -315,9 +368,22 @@ class ProfileScreen extends StatelessWidget {
                 style: TextStyle(color: AppTheme.mutedGrey)),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              // TODO: gọi API xoá dữ liệu
+              final ok =
+                  await context.read<UserDataProvider>().deleteHealthData();
+              if (context.mounted) {
+                await context.read<AuthProvider>().getStats();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok
+                        ? 'Đã xóa toàn bộ dữ liệu sức khỏe'
+                        : 'Xóa dữ liệu thất bại'),
+                    backgroundColor:
+                        ok ? AppTheme.neonGreen : Colors.redAccent,
+                  ),
+                );
+              }
             },
             child: const Text('Xóa',
                 style: TextStyle(color: Colors.redAccent)),

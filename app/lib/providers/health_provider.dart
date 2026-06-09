@@ -7,13 +7,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/ble_constants.dart';
 import '../models/health_metrics.dart';
 import '../services/ble_service.dart';
+import '../services/health_data_service.dart';
 import '../services/permission_service.dart';
 
 class HealthProvider extends ChangeNotifier {
   static const String _savedWatchIdKey = 'saved_watch_id';
   static const int _maxRetries = 5;
+  static const Duration _saveInterval = Duration(seconds: 45);
 
   final BleService _bleService = BleService();
+  final HealthDataService _healthData = HealthDataService();
   
   StreamSubscription? _connectionStateSubscription;
   int _retryCount = 0;
@@ -30,6 +33,9 @@ class HealthProvider extends ChangeNotifier {
   String _connectionStatus = "Disconnected";
   BluetoothDevice? _connectedDevice;
   String _errorMessage = "";
+  String? Function()? _userIdProvider;
+  DateTime? _lastCloudSave;
+  VoidCallback? _onDataSaved;
 
   // Getters
   int get heartRate => _heartRate;
@@ -43,6 +49,14 @@ class HealthProvider extends ChangeNotifier {
 
   HealthProvider() {
     _initializeStreams();
+  }
+
+  void setUserIdProvider(String? Function()? provider) {
+    _userIdProvider = provider;
+  }
+
+  void setOnDataSaved(VoidCallback? callback) {
+    _onDataSaved = callback;
   }
 
   void _initializeStreams() {
@@ -265,12 +279,39 @@ class HealthProvider extends ChangeNotifier {
       }
     }
 
+    _maybeSaveToCloud();
     notifyListeners();
   }
 
   void _updateSpO2(int spo2) {
     _spO2 = spo2;
+    _maybeSaveToCloud();
     notifyListeners();
+  }
+
+  Future<void> _maybeSaveToCloud() async {
+    final userId = _userIdProvider?.call();
+    if (userId == null || !_isConnected) return;
+    if (_heartRate <= 0 || _spO2 <= 0) return;
+
+    final now = DateTime.now();
+    if (_lastCloudSave != null &&
+        now.difference(_lastCloudSave!) < _saveInterval) {
+      return;
+    }
+
+    try {
+      await _healthData.saveHealthRecord(
+        userId: userId,
+        heartRate: _heartRate,
+        spo2: _spO2,
+        timestamp: now,
+      );
+      _lastCloudSave = now;
+      _onDataSaved?.call();
+    } catch (e) {
+      debugPrint('[HealthProvider] Cloud save failed: $e');
+    }
   }
 
   Future<void> syncTimeToWatch() async {
