@@ -276,13 +276,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 GestureDetector(
-<<<<<<< HEAD
-                  onTap: () => _openDetail(mockCalories(provider.isConnected)), 
-                  child: _BentoCard(
-=======
                   onTap: () => _openUnavailable('Năng lượng'),
                   child: const _BentoCard(
->>>>>>> 404cd7ca7584e72972e0c09c92c419b6b83c753e
                     title: 'Năng lượng',
                     value: '--',
                     unit: 'kcal',
