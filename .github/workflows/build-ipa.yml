@@ -8,7 +8,9 @@ on:
 jobs:
   build-ios:
     runs-on: macos-latest
-
+    defaults:
+      run:
+        working-directory: ./app  # ← đổi "app" thành tên thư mục thật
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
