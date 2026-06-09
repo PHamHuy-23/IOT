@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ══════════════════════════════════════════════════════════════
@@ -89,6 +90,8 @@ class UserStats {
 // AUTH PROVIDER
 // ══════════════════════════════════════════════════════════════
 class AuthProvider extends ChangeNotifier {
+  static const String _savedUserIdKey = 'saved_user_id';
+
   final SupabaseClient _supabase = Supabase.instance.client;
 
   AppUser? _currentUser;
@@ -107,20 +110,11 @@ class AuthProvider extends ChangeNotifier {
   /// Kiểm tra session còn hiệu lực khi app khởi động.
   /// Supabase lưu session trong secure storage nên không cần lưu thủ công.
   Future<void> initialize() async {
-    final session = _supabase.auth.currentSession;
-    if (session != null) {
-      await _loadUserProfile(session.user.id);
+    final prefs = await SharedPreferences.getInstance();
+    final savedUserId = prefs.getString(_savedUserIdKey);
+    if (savedUserId != null) {
+      await _loadUserProfile(savedUserId);
     }
-
-    // Lắng nghe thay đổi auth state (token refresh, logout từ tab khác...)
-    _supabase.auth.onAuthStateChange.listen((data) {
-      final event = data.event;
-      if (event == AuthChangeEvent.signedOut) {
-        _currentUser = null;
-        _stats = UserStats.empty;
-        notifyListeners();
-      }
-    });
   }
 
   // ══════════════════════════════════════════════════════════
@@ -150,10 +144,8 @@ class AuthProvider extends ChangeNotifier {
 
       final userData = result is List ? result.first : result;
       _currentUser = AppUser.fromMap(userData as Map<String, dynamic>);
-      
-      // Tự động tải thống kê của user sau khi đăng nhập thành công
+      await _persistUserId(_currentUser!.id);
       await getStats();
-      
       notifyListeners();
       return true;
     } on PostgrestException catch (e) {
@@ -222,10 +214,8 @@ class AuthProvider extends ChangeNotifier {
 
       final userData = result is List ? result.first : result;
       _currentUser = AppUser.fromMap(userData as Map<String, dynamic>);
-      
-      // Tải stats cho user mới tạo (thường trả về các giá trị bằng 0)
+      await _persistUserId(_currentUser!.id);
       await getStats();
-      
       notifyListeners();
       return true;
     } on PostgrestException catch (e) {
@@ -247,6 +237,8 @@ class AuthProvider extends ChangeNotifier {
     _currentUser = null;
     _stats = UserStats.empty;
     clearError();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_savedUserIdKey);
     notifyListeners();
   }
 
@@ -312,6 +304,11 @@ class AuthProvider extends ChangeNotifier {
   // PRIVATE HELPERS
   // ══════════════════════════════════════════════════════════
 
+  Future<void> _persistUserId(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_savedUserIdKey, userId);
+  }
+
   Future<void> _loadUserProfile(String userId) async {
     try {
       final data = await _supabase
@@ -323,10 +320,11 @@ class AuthProvider extends ChangeNotifier {
       
       // Tự động tải thống kê khi phục hồi phiên đăng nhập thành công
       await getStats();
-      
       notifyListeners();
     } catch (e) {
       debugPrint('[AuthProvider._loadUserProfile] $e');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_savedUserIdKey);
     }
   }
 
