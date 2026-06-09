@@ -8,6 +8,9 @@ on:
 jobs:
   build-ios:
     runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ./app
 
     steps:
       - name: Checkout code
@@ -39,5 +42,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MyApp-IPA
-          path: MyApp.ipa
+          path: app/MyApp.ipa
           retention-days: 7
