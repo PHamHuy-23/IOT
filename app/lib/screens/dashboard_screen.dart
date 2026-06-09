@@ -231,7 +231,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 // Năng lượng (Chưa có mock riêng nên tạm thời dẫn tới trang Bước chân hoặc Calories tùy thiết kế)
                 GestureDetector(
-                  onTap: () => _openDetail(mockSteps(provider.isConnected)), 
+                  onTap: () => _openDetail(mockCalories(provider.isConnected)), 
                   child: _BentoCard(
                     title: 'Năng lượng',
                     value: provider.isConnected ? '185' : '--',

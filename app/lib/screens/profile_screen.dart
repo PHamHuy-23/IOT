@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import 'profile_features_screens.dart';
 import '../themes/app_theme.dart';
 
 // ══════════════════════════════════════════════════════════════
@@ -153,14 +154,24 @@ class ProfileScreen extends StatelessWidget {
                       iconBg: const Color(0xFF0A1020),
                       iconColor: AppTheme.accentBlue,
                       label: 'Thông báo',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const NotificationSettingScreen()),
+                        );
+                      },
                     ),
                     _MenuItem(
                       icon: Icons.lock_outline_rounded,
                       iconBg: const Color(0xFF1A1020),
                       iconColor: AppTheme.accentPurple,
                       label: 'Bảo mật & Quyền riêng tư',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const SecurityPrivacyScreen()),
+                        );
+                      },
                     ),
                   ]),
 
@@ -173,14 +184,24 @@ class ProfileScreen extends StatelessWidget {
                       iconBg: const Color(0xFF0A1A10),
                       iconColor: AppTheme.accentGreen,
                       label: 'Lịch sử & Báo cáo',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const HistoryReportsScreen()),
+                        );
+                      },
                     ),
                     _MenuItem(
                       icon: Icons.cloud_upload_outlined,
                       iconBg: const Color(0xFF0A1020),
                       iconColor: AppTheme.accentBlue,
                       label: 'Xuất dữ liệu',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ExportDataScreen()),
+                        );
+                      },
                     ),
                     _MenuItem(
                       icon: Icons.delete_outline_rounded,
