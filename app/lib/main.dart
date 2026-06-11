@@ -22,10 +22,7 @@ void main() async {
   );
 
   final authProvider = AuthProvider();
-  
-  // KHÔNG dùng await ở đây nữa. Gọi hàm và để nó chạy ngầm.
-  // Giao diện sẽ hiển thị màn hình Loading ngay lập tức nhờ biến _isLoading = true
-  authProvider.initialize();
+  await authProvider.initialize();
 
   runApp(MyApp(authProvider: authProvider));
 }
@@ -63,10 +60,9 @@ class MyApp extends StatelessWidget {
                 );
               }
               
-              // 2. Tự động điều hướng dựa trên trạng thái xác thực thực tế
-              // Nếu đã đăng nhập -> Vào thẳng DashboardScreen
-              // Nếu chưa đăng nhập -> Ép vào AuthScreen để Login/SignUp
-              return const DashboardScreen();
+              return auth.isLoggedIn
+                  ? const DashboardScreen()
+                  : const AuthScreen();
             },
           ),
           // =================================================================================

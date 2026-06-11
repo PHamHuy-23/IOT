@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ══════════════════════════════════════════════════════════════
@@ -116,7 +115,7 @@ class AuthProvider extends ChangeNotifier {
 
   // ── Khởi tạo — gọi trong main() sau Supabase.initialize() ──
   /// Kiểm tra session còn hiệu lực khi app khởi động.
-  /// Dùng flutter_secure_storage để persist qua các lần kill app.
+  /// Dùng session storage nội bộ của Supabase SDK để persist qua các lần kill app.
   // ── Khởi tạo — gọi trong main() ──
   Future<void> initialize() async {
     // 1. Kiểm tra xem Supabase SDK có giữ session cũ nào trong bộ nhớ máy không
@@ -173,9 +172,11 @@ class AuthProvider extends ChangeNotifier {
     clearError();
 
     try {
+      final loginEmail = await _resolveLoginEmail(email);
+
       // Dùng hàm chuẩn của Supabase Auth để đăng nhập bằng Email
       final AuthResponse res = await _supabase.auth.signInWithPassword(
-        email: email.trim().toLowerCase(),
+        email: loginEmail,
         password: password,
       );
 
@@ -197,6 +198,24 @@ class AuthProvider extends ChangeNotifier {
     } finally {
       _setLoading(false);
     }
+  }
+
+  Future<String> _resolveLoginEmail(String login) async {
+    final normalized = login.trim().toLowerCase();
+    if (normalized.contains('@')) return normalized;
+
+    try {
+      final result = await _supabase.rpc(
+        'resolve_login_email',
+        params: {'p_login': normalized},
+      );
+      final resolved = result?.toString().trim().toLowerCase();
+      if (resolved != null && resolved.isNotEmpty) return resolved;
+    } catch (e) {
+      debugPrint('[AuthProvider._resolveLoginEmail] $e');
+    }
+
+    return normalized;
   }
 
   // ══════════════════════════════════════════════════════════

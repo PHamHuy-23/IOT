@@ -71,16 +71,8 @@ class _AuthScreenState extends State<AuthScreen>
     bool success;
 
     if (_isLogin) {
-      // XỬ LÝ CHO TÀI KHOẢN CŨ:
-      String loginInput = _loginCtrl.text.trim();
-      
-      // Nếu là username thô (không có @), tự động nối đuôi legacy.local
-      if (!loginInput.contains('@')) {
-        loginInput = '$loginInput@legacy.local';
-      }
-
       success = await auth.signIn(
-        loginInput,
+        _loginCtrl.text,
         _passCtrl.text,
       );
     } else {
