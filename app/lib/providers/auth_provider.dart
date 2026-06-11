@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ══════════════════════════════════════════════════════════════
@@ -98,13 +98,13 @@ class UserStats {
 // AUTH PROVIDER
 // ══════════════════════════════════════════════════════════════
 class AuthProvider extends ChangeNotifier {
-  static const String _savedUserIdKey = 'saved_user_id';
+
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
   AppUser? _currentUser;
   UserStats _stats = UserStats.empty;
-  bool _isLoading = false;
+  bool _isLoading = true;
   String _error = '';
 
   // ── Getters ────────────────────────────────────────────────
@@ -116,53 +116,83 @@ class AuthProvider extends ChangeNotifier {
 
   // ── Khởi tạo — gọi trong main() sau Supabase.initialize() ──
   /// Kiểm tra session còn hiệu lực khi app khởi động.
-  /// Supabase lưu session trong secure storage nên không cần lưu thủ công.
+  /// Dùng flutter_secure_storage để persist qua các lần kill app.
+  // ── Khởi tạo — gọi trong main() ──
   Future<void> initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedUserId = prefs.getString(_savedUserIdKey);
-    if (savedUserId != null) {
-      await _loadUserProfile(savedUserId);
+    // 1. Kiểm tra xem Supabase SDK có giữ session cũ nào trong bộ nhớ máy không
+    final initialSession = _supabase.auth.currentSession;
+    
+    if (initialSession != null) {
+      final userId = initialSession.user.id;
+      
+      // Khởi tạo user "tạm thời" để app KHÔNG bị đá ra màn hình đăng nhập khi mất mạng
+      _currentUser = AppUser(
+        id: userId,
+        email: initialSession.user.email ?? '',
+        username: 'loading...',
+        displayName: 'Người dùng',
+        isAdmin: false,
+        avatarColor: 'red',
+      );
+      
+      // Chạy ngầm việc tải thông tin thật từ Database và Stats (nếu có mạng sẽ cập nhật lại)
+      _loadUserProfile(userId).then((_) => getStats());
     }
+
+    // Tắt trạng thái loading ban đầu của App
+    _isLoading = false;
+    notifyListeners();
+
+    // 2. Lắng nghe dòng sự kiện thay đổi trạng thái Auth (Login, Logout, Token Refreshed)
+    _supabase.auth.onAuthStateChange.listen((data) async {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+
+      debugPrint('[Supabase Auth Event]: $event');
+
+      if (session != null) {
+        // Nếu có session mới (vừa đăng nhập thành công hoặc token tự động gia hạn thành công)
+        if (_currentUser == null || _currentUser!.id != session.user.id) {
+          await _loadUserProfile(session.user.id);
+          await getStats();
+        }
+      } else {
+        // Nếu session bằng null (Người dùng bấm SignOut hoặc Token bị hủy từ server)
+        _currentUser = null;
+        _stats = UserStats.empty;
+        notifyListeners();
+      }
+    });
   }
 
   // ══════════════════════════════════════════════════════════
-  // SIGN IN
-  // Dùng custom bcrypt check vì schema không dùng Supabase Auth
-  // mà lưu password_hash tự quản lý.
+  // SIGN IN (Cập nhật theo chuẩn Supabase Auth)
   // ══════════════════════════════════════════════════════════
-  Future<bool> signIn(String usernameOrEmail, String password) async {
+  Future<bool> signIn(String email, String password) async {
     _setLoading(true);
     clearError();
 
     try {
-      // Gọi RPC function để check bcrypt an toàn phía server
-      final result = await _supabase.rpc(
-        'authenticate_user',
-        params: {
-          'p_login': usernameOrEmail.trim().toLowerCase(),
-          'p_password': password,
-        },
+      // Dùng hàm chuẩn của Supabase Auth để đăng nhập bằng Email
+      final AuthResponse res = await _supabase.auth.signInWithPassword(
+        email: email.trim().toLowerCase(),
+        password: password,
       );
 
-      // RPC trả về row đầu tiên hoặc null nếu sai credentials
-      if (result == null || (result is List && result.isEmpty)) {
-        _setError('Tên đăng nhập hoặc mật khẩu không đúng');
+      if (res.user == null) {
+        _setError('Đăng nhập thất bại');
         return false;
       }
 
-      final userData = result is List ? result.first : result;
-      _currentUser = AppUser.fromMap(userData as Map<String, dynamic>);
-      await _persistUserId(_currentUser!.id);
-      await _enrichUserProfile(_currentUser!.id);
-      await getStats();
-      notifyListeners();
+      // Đăng nhập thành công -> Lấy thông tin chi tiết từ bảng 'users' của bạn
+      await _loadUserProfile(res.user!.id);
       return true;
-    } on PostgrestException catch (e) {
-      _setError(_mapPostgrestError(e));
+    } on AuthException catch (e) {
+      // Bắt các lỗi auth của Supabase (sai mật khẩu, sai email...)
+      _setError(e.message); // Hoặc dịch sang tiếng Việt: 'Email hoặc mật khẩu không đúng'
       return false;
     } catch (e) {
-      _setError('Đã xảy ra lỗi. Vui lòng thử lại.');
-      debugPrint('[AuthProvider.signIn] $e');
+      _setError('Đã xảy ra lỗi hệ thống.');
       return false;
     } finally {
       _setLoading(false);
@@ -170,7 +200,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ══════════════════════════════════════════════════════════
-  // SIGN UP
+  // SIGN UP (Cập nhật theo chuẩn Supabase Auth)
   // ══════════════════════════════════════════════════════════
   Future<bool> signUp({
     required String name,
@@ -180,7 +210,6 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     clearError();
 
-    // Validate cơ bản phía client
     if (password.length < 6) {
       _setError('Mật khẩu tối thiểu 6 ký tự');
       _setLoading(false);
@@ -188,67 +217,55 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
-      // Kiểm tra email đã tồn tại chưa
-      final existing = await _supabase
-          .from('users')
-          .select('id')
-          .eq('email', email.trim().toLowerCase())
-          .maybeSingle();
-
-      if (existing != null) {
-        _setError('Email này đã được sử dụng');
-        return false;
-      }
-
-      // Tạo username từ email (phần trước @)
-      final baseUsername = email.split('@').first.toLowerCase()
-          .replaceAll(RegExp(r'[^a-z0-9]'), '');
-      final username = await _generateUniqueUsername(baseUsername);
-
-      // Gọi RPC để insert + hash password phía server
-      final result = await _supabase.rpc(
-        'create_user',
-        params: {
-          'p_email': email.trim().toLowerCase(),
-          'p_username': username,
-          'p_display_name': name.trim(),
-          'p_password': password,
-        },
+      // 1. Đăng ký tài khoản vào hệ thống Auth gốc của Supabase
+      final AuthResponse res = await _supabase.auth.signUp(
+        email: email.trim().toLowerCase(),
+        password: password,
       );
 
-      if (result == null) {
-        _setError('Không thể tạo tài khoản. Vui lòng thử lại.');
+      final supabaseUser = res.user;
+      if (supabaseUser == null) {
+        _setError('Không thể tạo tài khoản');
         return false;
       }
 
-      final userData = result is List ? result.first : result;
-      _currentUser = AppUser.fromMap(userData as Map<String, dynamic>);
-      await _persistUserId(_currentUser!.id);
-      await _enrichUserProfile(_currentUser!.id);
-      await getStats();
-      notifyListeners();
+      // 2. Tạo username duy nhất giống logic cũ của bạn
+      final baseUsername = email.split('@').first.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final username = await _generateUniqueUsername(baseUsername);
+
+      // 3. Chèn thông tin meta vào bảng công khai 'users' bằng ID từ Supabase Auth cấp
+      await _supabase.from('users').insert({
+        'id': supabaseUser.id, // Bắt buộc trùng với ID của bên Auth
+        'email': email.trim().toLowerCase(),
+        'username': username,
+        'display_name': name.trim(),
+        'avatar_color': 'red',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // Đọc lại profile và stats
+      await _loadUserProfile(supabaseUser.id);
       return true;
-    } on PostgrestException catch (e) {
-      _setError(_mapPostgrestError(e));
+    } on AuthException catch (e) {
+      _setError(e.message);
       return false;
     } catch (e) {
-      _setError('Đã xảy ra lỗi. Vui lòng thử lại.');
-      debugPrint('[AuthProvider.signUp] $e');
+      _setError('Đã xảy ra lỗi trong quá trình đăng ký.');
       return false;
     } finally {
       _setLoading(false);
     }
   }
-
   // ══════════════════════════════════════════════════════════
-  // SIGN OUT
+  // SIGN OUT (Cập nhật)
   // ══════════════════════════════════════════════════════════
   Future<void> signOut() async {
     _currentUser = null;
     _stats = UserStats.empty;
     clearError();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_savedUserIdKey);
+    
+    // Gọi hàm logout của Supabase để xóa token trên thiết bị
+    await _supabase.auth.signOut();
     notifyListeners();
   }
 
@@ -337,28 +354,20 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _persistUserId(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_savedUserIdKey, userId);
-  }
 
   Future<void> _loadUserProfile(String userId) async {
     try {
       final data = await _supabase
           .from('users')
-          .select(
-              'id, email, username, display_name, is_admin, is_test_account, avatar_color')
+          .select('id, email, username, display_name, is_admin, is_test_account, avatar_color')
           .eq('id', userId)
           .single();
+
       _currentUser = AppUser.fromMap(data);
-      
-      // Tự động tải thống kê khi phục hồi phiên đăng nhập thành công
-      await getStats();
       notifyListeners();
     } catch (e) {
-      debugPrint('[AuthProvider._loadUserProfile] $e');
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_savedUserIdKey);
+      // Nếu lỗi mạng, giữ nguyên _currentUser tạm thời ở hàm initialize() để người dùng không bị văng ra
+      debugPrint('[AuthProvider._loadUserProfile Ngầm] Không thể cập nhật profile mới nhất: $e');
     }
   }
 

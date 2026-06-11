@@ -71,8 +71,16 @@ class _AuthScreenState extends State<AuthScreen>
     bool success;
 
     if (_isLogin) {
+      // XỬ LÝ CHO TÀI KHOẢN CŨ:
+      String loginInput = _loginCtrl.text.trim();
+      
+      // Nếu là username thô (không có @), tự động nối đuôi legacy.local
+      if (!loginInput.contains('@')) {
+        loginInput = '$loginInput@legacy.local';
+      }
+
       success = await auth.signIn(
-        _loginCtrl.text.trim(),
+        loginInput,
         _passCtrl.text,
       );
     } else {
@@ -333,9 +341,9 @@ class _AuthScreenState extends State<AuthScreen>
                               child: Divider(
                                   color: AppTheme.subtleGrey, thickness: 0.5),
                             ),
-                            Padding(
+                            const Padding(
                               padding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
+                                  EdgeInsets.symmetric(horizontal: 12),
                               child: Text(
                                 'hoặc',
                                 style: TextStyle(
@@ -469,11 +477,11 @@ class _DemoHint extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.info_outline_rounded,
+              Icon(Icons.info_outline_rounded,
                   color: AppTheme.mutedGrey, size: 14),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               Text(
                 'Tài khoản demo  •  mật khẩu: 123456',
                 style: TextStyle(

@@ -14,9 +14,8 @@ class ScanFamilyQrScreen extends StatefulWidget {
 }
 
 class _ScanFamilyQrScreenState extends State<ScanFamilyQrScreen> {
-  final _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
-  );
+  MobileScannerController? _controller;
+
   bool _processing = false;
   bool _cameraDenied = false;
 
@@ -29,27 +28,53 @@ class _ScanFamilyQrScreenState extends State<ScanFamilyQrScreen> {
   Future<void> _ensureCamera() async {
     final status = await Permission.camera.request();
     if (!mounted) return;
-    setState(() => _cameraDenied = !status.isGranted);
+
+    if (!status.isGranted) {
+      setState(() => _cameraDenied = true);
+      return;
+    }
+
+    // Tạo controller trước setState
+    final controller = MobileScannerController(
+      detectionSpeed: DetectionSpeed.noDuplicates,
+    );
+    setState(() => _controller = controller);
+
+    // Start SAU khi frame đã build xong — tránh crash Android
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      try {
+        await _controller?.start();
+      } catch (e) {
+        debugPrint('[ScanFamilyQrScreen] Camera start error: $e');
+      }
+    });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_processing) return;
     if (capture.barcodes.isEmpty) return;
+
     final raw = capture.barcodes.first.rawValue;
-    if (raw == null) return;
+
+    // Fix: lọc null thật, string "null", và rỗng
+    if (raw == null || raw.isEmpty || raw == 'null') return;
 
     setState(() => _processing = true);
-    await _controller.stop();
+    await _controller?.stop();
 
     final owner = await context.read<FamilyShareProvider>().joinByQr(raw);
 
-    if (!mounted) return;
+    if (!mounted) {
+      _processing = false;
+      return;
+    }
 
     if (owner != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -58,6 +83,9 @@ class _ScanFamilyQrScreenState extends State<ScanFamilyQrScreen> {
           backgroundColor: AppTheme.neonGreen,
         ),
       );
+      // Dispose controller trước khi navigate để tránh dispose 2 lần
+      _controller?.dispose();
+      _controller = null;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => SharedHealthScreen(owner: owner),
@@ -75,7 +103,7 @@ class _ScanFamilyQrScreenState extends State<ScanFamilyQrScreen> {
         ),
       );
       setState(() => _processing = false);
-      await _controller.start();
+      await _controller?.start();
     }
   }
 
@@ -86,8 +114,10 @@ class _ScanFamilyQrScreenState extends State<ScanFamilyQrScreen> {
       appBar: AppBar(
         backgroundColor: AppTheme.black,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Quét mã người thân',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Quét mã người thân',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
       body: _cameraDenied
           ? Center(
@@ -112,43 +142,51 @@ class _ScanFamilyQrScreenState extends State<ScanFamilyQrScreen> {
                 ),
               ),
             )
-          : Stack(
-        children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [AppTheme.black, AppTheme.black.withOpacity(0)],
-                ),
-              ),
-              child: Column(
-                children: [
-                  if (_processing)
-                    const CircularProgressIndicator(color: AppTheme.accentRed)
-                  else
-                    const Text(
-                      'Hướng camera vào mã QR trên điện thoại\n'
-                      'của người đang đeo thiết bị',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white, fontSize: 14),
+          : _controller == null
+              ? const Center(
+                  child: CircularProgressIndicator(color: AppTheme.accentRed),
+                )
+              : Stack(
+                  children: [
+                    MobileScanner(
+                      controller: _controller!,
+                      onDetect: _onDetect,
                     ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              AppTheme.black,
+                              AppTheme.black.withOpacity(0),
+                            ],
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            if (_processing)
+                              const CircularProgressIndicator(
+                                  color: AppTheme.accentRed)
+                            else
+                              const Text(
+                                'Hướng camera vào mã QR trên điện thoại\n'
+                                'của người đang đeo thiết bị',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: Colors.white, fontSize: 14),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
     );
   }
 }
-

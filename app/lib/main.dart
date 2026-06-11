@@ -7,6 +7,7 @@ import 'providers/alert_provider.dart';
 import 'providers/family_share_provider.dart';
 import 'providers/user_data_provider.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/auth_screen.dart'; // Đảm bảo đã import màn hình auth
 import 'themes/app_theme.dart';
 import 'widgets/provider_binder.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -14,23 +15,30 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
-  
+
   await Supabase.initialize(
     url: dotenv.env['url']!,
     anonKey: dotenv.env['anonKey']!,
   );
 
-  runApp(const MyApp());
+  final authProvider = AuthProvider();
+  
+  // KHÔNG dùng await ở đây nữa. Gọi hàm và để nó chạy ngầm.
+  // Giao diện sẽ hiển thị màn hình Loading ngay lập tức nhờ biến _isLoading = true
+  authProvider.initialize();
+
+  runApp(MyApp(authProvider: authProvider));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final AuthProvider authProvider;
+  const MyApp({super.key, required this.authProvider});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()..initialize()),
+        ChangeNotifierProvider.value(value: authProvider), // dùng instance đã init
         ChangeNotifierProvider(create: (_) => HealthProvider()),
         ChangeNotifierProvider(create: (_) => UserDataProvider()),
         ChangeNotifierProvider(create: (_) => FamilyShareProvider()),
@@ -41,7 +49,28 @@ class MyApp extends StatelessWidget {
           title: 'Health Monitor BLE',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.darkTheme,
-          home: const DashboardScreen(),
+          
+          // === THAY THẾ HOÀN TOÀN DÒNG "home: const DashboardScreen()," BẰNG ĐOẠN DƯỚI ĐÂY ===
+          home: Consumer<AuthProvider>(
+            builder: (context, auth, _) {
+              // 1. Nếu app đang bận kiểm tra bộ nhớ lúc khởi động -> Hiện màn hình chờ
+              if (auth.isLoading) {
+                return const Scaffold(
+                  backgroundColor: AppTheme.black,
+                  body: Center(
+                    child: CircularProgressIndicator(color: AppTheme.accentRed),
+                  ),
+                );
+              }
+              
+              // 2. Tự động điều hướng dựa trên trạng thái xác thực thực tế
+              // Nếu đã đăng nhập -> Vào thẳng DashboardScreen
+              // Nếu chưa đăng nhập -> Ép vào AuthScreen để Login/SignUp
+              return const DashboardScreen();
+            },
+          ),
+          // =================================================================================
+          
         ),
       ),
     );

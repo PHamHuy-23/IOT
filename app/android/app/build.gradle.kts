@@ -18,6 +18,7 @@ android {
     }
 
     defaultConfig {
+        minSdk = flutter.minSdkVersion
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.app"
         // You can update the following values to match your application needs.
@@ -30,9 +31,13 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Kotlin DSL syntax
+            signingConfig = signingConfigs.getByName("debug") // dùng debug key nếu chưa có release key
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
